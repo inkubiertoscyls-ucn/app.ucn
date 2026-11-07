@@ -3,6 +3,7 @@ Inventario service - Business logic for inventory movements.
 Priority: stock calculation from history, validations, permissions.
 """
 import logging
+import math
 from typing import Dict, List, Optional
 from datetime import datetime
 
@@ -18,6 +19,7 @@ from core.exceptions import (
     AuthorizationError
 )
 from core.utils import normalizar_rut, validar_rut, es_numero_positivo
+from core.stock import calcular_stock
 
 logger = logging.getLogger(__name__)
 
@@ -41,13 +43,7 @@ class InventarioService:
         """
         try:
             movimientos = self.movimientos_repo.get_stock_movimientos(id_producto, id_area)
-            stock = 0
-            for mov in movimientos:
-                cantidad = mov.get("cantidad", 0)
-                tipo_mov = mov.get("dim_tipo_movimiento", {})
-                factor = tipo_mov.get("factor_stock", 0) if tipo_mov else 0
-                stock += cantidad * factor
-            return stock
+            return calcular_stock(movimientos)
         except Exception as e:
             logger.error(f"Error calculating stock: {type(e).__name__}")
             return 0
@@ -88,6 +84,48 @@ class InventarioService:
             logger.error(f"Error finding low stock: {type(e).__name__}")
             return []
     
+    def _resolver_costo_unitario(self, data: Dict, producto: Dict) -> float:
+        """Resuelve el costo unitario obligatorio de `hecho_inventario`.
+
+        Si el formulario no lo informa se usa `costo_base` del producto y, como
+        último respaldo, 0. Un valor informado debe ser numérico y no negativo.
+        """
+        valor = data.get("costo_unitario")
+        if valor is None or (isinstance(valor, str) and not valor.strip()):
+            valor = producto.get("costo_base")
+        if valor is None or (isinstance(valor, str) and not valor.strip()):
+            valor = 0
+
+        try:
+            numero = float(valor)
+        except (TypeError, ValueError) as exc:
+            raise ValidationError("El costo unitario debe ser un número") from exc
+        if not math.isfinite(numero) or numero < 0:
+            raise ValidationError("El costo unitario no puede ser negativo")
+        return numero
+
+    def _resolver_id_fecha(self, data: Dict) -> int:
+        """Resuelve la fecha del movimiento, creándola solo si no existe."""
+        if data.get("id_fecha"):
+            return data["id_fecha"]
+
+        hoy = datetime.now().date()
+        fecha = self.fechas_repo.get_all({"fecha": str(hoy)})
+        if fecha:
+            data["id_fecha"] = fecha[0]["id_fecha"]
+            return data["id_fecha"]
+
+        created = self.fechas_repo.create(
+            {
+                "fecha": str(hoy),
+                "dia": hoy.day,
+                "mes": hoy.month,
+                "anio": hoy.year,
+            }
+        )
+        data["id_fecha"] = created["id_fecha"]
+        return data["id_fecha"]
+
     def _validar_movimiento_base(self, data: Dict) -> None:
         """Validate base movement data."""
         # Validate required fields
@@ -122,7 +160,16 @@ class InventarioService:
             raise NotFoundError("Producto no encontrado")
         if not producto.get("activo", False):
             raise ValidationError("Producto inactivo")
-        
+
+        # `hecho_inventario.costo_unitario` es obligatorio en la base real.
+        data["costo_unitario"] = self._resolver_costo_unitario(data, producto)
+
+        # Validate optional date identifier
+        if data.get("id_fecha"):
+            fecha = self.fechas_repo.get_all({"id_fecha": data["id_fecha"]})
+            if not fecha:
+                raise NotFoundError("Fecha no encontrada")
+
         # Validate area exists
         area = self.areas_repo.get_by_id("id_area", data["id_area"])
         if not area:
@@ -165,20 +212,7 @@ class InventarioService:
             raise ValidationError("Tipo de movimiento debe tener factor_stock +1 para entrada")
         
         # Add fecha
-        if not data.get("id_fecha"):
-            hoy = datetime.now().date()
-            fecha = self.fechas_repo.get_all({"fecha": str(hoy)})
-            if fecha:
-                data["id_fecha"] = fecha[0]["id_fecha"]
-            else:
-                # Create if not exists
-                created = self.fechas_repo.create({
-                    "fecha": str(hoy),
-                    "dia": hoy.day,
-                    "mes": hoy.month,
-                    "anio": hoy.year
-                })
-                data["id_fecha"] = created["id_fecha"]
+        self._resolver_id_fecha(data)
         
         data["fecha_hora_registro"] = datetime.now().isoformat()
         return self.movimientos_repo.create(data)
@@ -199,19 +233,7 @@ class InventarioService:
                     f"Stock insuficiente. Actual: {stock_actual}, Solicitado: {cantidad}"
                 )
         
-        if not data.get("id_fecha"):
-            hoy = datetime.now().date()
-            fecha = self.fechas_repo.get_all({"fecha": str(hoy)})
-            if fecha:
-                data["id_fecha"] = fecha[0]["id_fecha"]
-            else:
-                created = self.fechas_repo.create({
-                    "fecha": str(hoy),
-                    "dia": hoy.day,
-                    "mes": hoy.month,
-                    "anio": hoy.year
-                })
-                data["id_fecha"] = created["id_fecha"]
+        self._resolver_id_fecha(data)
         
         data["fecha_hora_registro"] = datetime.now().isoformat()
         return self.movimientos_repo.create(data)
@@ -231,19 +253,7 @@ class InventarioService:
                     f"Stock insuficiente para merma. Actual: {stock_actual}, Solicitado: {cantidad}"
                 )
         
-        if not data.get("id_fecha"):
-            hoy = datetime.now().date()
-            fecha = self.fechas_repo.get_all({"fecha": str(hoy)})
-            if fecha:
-                data["id_fecha"] = fecha[0]["id_fecha"]
-            else:
-                created = self.fechas_repo.create({
-                    "fecha": str(hoy),
-                    "dia": hoy.day,
-                    "mes": hoy.month,
-                    "anio": hoy.year
-                })
-                data["id_fecha"] = created["id_fecha"]
+        self._resolver_id_fecha(data)
         
         data["fecha_hora_registro"] = datetime.now().isoformat()
         return self.movimientos_repo.create(data)
@@ -255,19 +265,7 @@ class InventarioService:
         if tipo_mov.get("factor_stock") != 1:
             raise ValidationError("Tipo de movimiento debe tener factor_stock +1 para ajuste positivo")
         
-        if not data.get("id_fecha"):
-            hoy = datetime.now().date()
-            fecha = self.fechas_repo.get_all({"fecha": str(hoy)})
-            if fecha:
-                data["id_fecha"] = fecha[0]["id_fecha"]
-            else:
-                created = self.fechas_repo.create({
-                    "fecha": str(hoy),
-                    "dia": hoy.day,
-                    "mes": hoy.month,
-                    "anio": hoy.year
-                })
-                data["id_fecha"] = created["id_fecha"]
+        self._resolver_id_fecha(data)
         
         data["fecha_hora_registro"] = datetime.now().isoformat()
         return self.movimientos_repo.create(data)
@@ -287,19 +285,7 @@ class InventarioService:
                     f"Stock insuficiente para ajuste negativo. Actual: {stock_actual}, Solicitado: {cantidad}"
                 )
         
-        if not data.get("id_fecha"):
-            hoy = datetime.now().date()
-            fecha = self.fechas_repo.get_all({"fecha": str(hoy)})
-            if fecha:
-                data["id_fecha"] = fecha[0]["id_fecha"]
-            else:
-                created = self.fechas_repo.create({
-                    "fecha": str(hoy),
-                    "dia": hoy.day,
-                    "mes": hoy.month,
-                    "anio": hoy.year
-                })
-                data["id_fecha"] = created["id_fecha"]
+        self._resolver_id_fecha(data)
         
         data["fecha_hora_registro"] = datetime.now().isoformat()
         return self.movimientos_repo.create(data)

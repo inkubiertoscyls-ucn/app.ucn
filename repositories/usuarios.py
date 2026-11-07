@@ -30,6 +30,18 @@ class UsuariosRepository(BaseRepository):
     def get_by_rol(self, rol: str) -> List[Dict]:
         """Get users by role."""
         return self.get_all({"rol": rol})
+
+    def nombres_por_rut(self) -> List[Dict]:
+        """Devuelve solo RUT y nombre, sin datos sensibles.
+
+        Se usa para mostrar al responsable de un movimiento en el historial.
+        """
+        response = (
+            self.client.table(self.table_name)
+            .select("rut_usuario, nombre_usuario")
+            .execute()
+        )
+        return response.data or []
     
     def es_activo(self, rut: str) -> bool:
         """Check if user is active."""

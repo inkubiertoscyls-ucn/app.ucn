@@ -5,6 +5,12 @@ import pytest
 from unittest.mock import MagicMock
 
 
+@pytest.fixture(autouse=True)
+def _sin_cache_datos(monkeypatch):
+    """Evita que la caché de Streamlit filtre resultados entre pruebas."""
+    monkeypatch.setenv("INK_DISABLE_CACHE", "1")
+
+
 @pytest.fixture
 def mock_supabase_client():
     """Mock Supabase client for tests."""

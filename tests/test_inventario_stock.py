@@ -85,6 +85,36 @@ class TestInventarioStock:
         with pytest.raises(AuthorizationError):
             service._validar_movimiento_base(data)
     
+    def test_producto_inactivo_rechazado(self):
+        service = InventarioService()
+        usuarios = MagicMock()
+        usuarios.get_by_rut.return_value = {
+            "rut_usuario": "111111111",
+            "nombre_usuario": "Test",
+            "rol": "Operario",
+            "activo": True,
+        }
+        productos = MagicMock()
+        productos.get_by_id.return_value = {
+            "id_producto": 1,
+            "nombre_producto": "Inactivo",
+            "activo": False,
+            "costo_base": 100,
+        }
+        service.usuarios_repo = usuarios
+        service.productos_repo = productos
+
+        data = {
+            "id_producto": 1,
+            "id_area": 1,
+            "id_tipo_movimiento": 1,
+            "rut_usuario": "111111111",
+            "cantidad": 5,
+        }
+
+        with pytest.raises(ValidationError):
+            service._validar_movimiento_base(data)
+
     def test_no_guarda_costo_total(self):
         # Verificar que el esquema no incluye costo_total
         from db.schema_check import EXPECTED_SCHEMA

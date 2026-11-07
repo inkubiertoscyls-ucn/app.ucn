@@ -23,43 +23,52 @@ class UsuariosService:
         return self.repo.get_by_rut(rut)
     
     def registrar_usuario(self, data: Dict, creado_por_rut: str = None) -> Dict:
-        """Register new user."""
-        self._validar_usuario(data)
-        rut_norm = normalizar_rut(data["rut_usuario"])
-        
+        """Register new user.
+
+        El registro público solo puede crear Operarios. Las cuentas de
+        Operario siempre nacen inactivas y solo un administrador las habilita.
+        La creación de Administradores exige un administrador autorizado.
+        """
+        datos = dict(data)
+        self._validar_usuario(datos)
+        rut_norm = normalizar_rut(datos["rut_usuario"])
+
         # Password is required for new accounts
-        if "password_hash" in data and "password" not in data:
+        if "password_hash" in datos and "password" not in datos:
             raise ValidationError("No se acepta password_hash directo desde registro público")
-        if "password" not in data or not data.get("password"):
+        if "password" not in datos or not datos.get("password"):
             raise ValidationError("Contraseña es requerida")
-        
-        # Prevent public admin creation
-        if data.get("rol") == "Administrador":
+
+        if datos.get("rol") == "Administrador":
+            # Prevent public admin creation.
             if not creado_por_rut:
                 raise AuthorizationError("Solo un administrador autorizado puede crear cuentas de Administrador")
-            creador = self.repo.get_by_rut(normalizar_rut(creado_por_rut))
-            if not creador or not creador.get("activo") or creador.get("rol") != "Administrador":
-                raise AuthorizationError("Solo un administrador autorizado puede crear cuentas de Administrador")
-        
+            self._administrador_autorizado(creado_por_rut)
+            datos.setdefault("activo", True)
+        else:
+            # Ningún registro público puede autoasignarse otro rol ni activarse.
+            datos["rol"] = "Operario"
+            datos["activo"] = False
+
         if self.repo.get_by_rut(rut_norm):
             raise ValidationError("Ya existe un usuario con ese RUT")
-        data["rut_usuario"] = rut_norm
-        
+        datos["rut_usuario"] = rut_norm
+
         # Hash password securely
         try:
-            data["password_hash"] = hash_password(data["password"])
+            datos["password_hash"] = hash_password(datos["password"])
         except ValueError as e:
             raise ValidationError(str(e))
         except Exception:
             raise ValidationError("Error al procesar contraseña")
-        
+
         # Remove plain password
-        data.pop("password", None)
+        datos.pop("password", None)
         # Ensure no direct hash injection
-        if "password_hash" not in data or not data["password_hash"]:
+        if "password_hash" not in datos or not datos["password_hash"]:
             raise ValidationError("Error al generar hash de contraseña")
-        
-        return self.repo.create(data)
+
+        return self.repo.create(datos)
     
     def crear_primer_administrador(self, data: Dict) -> Dict:
         """Create first administrator only if no administrator exists. For local bootstrap only."""
@@ -150,9 +159,7 @@ class UsuariosService:
         if not usuario:
             raise NotFoundError("Usuario no encontrado")
         if modificado_por_rut:
-            modificador = self.repo.get_by_rut(normalizar_rut(modificado_por_rut))
-            if not modificador or not modificador.get("activo") or modificador.get("rol") != "Administrador":
-                raise AuthorizationError("Solo administradores autorizados pueden modificar usuarios")
+            self._administrador_autorizado(modificado_por_rut)
         if "rol" in data and data["rol"] not in ["Administrador", "Operario"]:
             raise ValidationError("Rol inválido. Debe ser 'Administrador' o 'Operario'")
         if "password" in data:
@@ -161,26 +168,70 @@ class UsuariosService:
             except ValueError as e:
                 raise ValidationError(str(e))
             data.pop("password")
-        if "password_hash" in data and "password" not in data:
-            # Solo permitir cambio de password_hash vía password
-            pass
         return self.repo.update("rut_usuario", rut_norm, data)
-    
-    def desactivar_usuario(self, rut: str) -> Dict:
-        """Deactivate user."""
+
+    def activar_usuario(self, rut: str, autorizado_por: str = None) -> Dict:
+        """Activate user. Un administrador activo debe autorizar la acción."""
         rut_norm = normalizar_rut(rut)
         usuario = self.consultar_usuario(rut_norm)
         if not usuario:
             raise NotFoundError("Usuario no encontrado")
-        return self.repo.deactivate("rut_usuario", rut_norm)
-    
-    def activar_usuario(self, rut: str) -> Dict:
-        """Activate user."""
-        rut_norm = normalizar_rut(rut)
-        usuario = self.consultar_usuario(rut_norm)
-        if not usuario:
-            raise NotFoundError("Usuario no encontrado")
+        if autorizado_por is not None:
+            self._administrador_autorizado(autorizado_por)
+        if usuario.get("activo", False):
+            return usuario
         return self.repo.update("rut_usuario", rut_norm, {"activo": True})
+
+    def desactivar_usuario(self, rut: str, autorizado_por: str = None) -> Dict:
+        """Deactivate user without deleting their history.
+
+        Reglas de seguridad:
+        - Solo un administrador activo puede autorizar la desactivación.
+        - Un administrador no puede desactivar su propia cuenta.
+        - Nunca se puede quedar el sistema sin administradores activos.
+        """
+        rut_norm = normalizar_rut(rut)
+        usuario = self.consultar_usuario(rut_norm)
+        if not usuario:
+            raise NotFoundError("Usuario no encontrado")
+
+        if autorizado_por is not None:
+            self._administrador_autorizado(autorizado_por)
+            if normalizar_rut(autorizado_por) == rut_norm:
+                raise AuthorizationError(
+                    "No puedes desactivar tu propia cuenta. Otro administrador debe hacerlo."
+                )
+
+        if usuario.get("activo", False) and usuario.get("rol") == "Administrador":
+            administradores = self.repo.get_by_rol("Administrador")
+            activos = [admin for admin in administradores if admin.get("activo", False)]
+            if len(activos) <= 1:
+                raise AuthorizationError(
+                    "Debe quedar al menos un administrador activo en el sistema."
+                )
+
+        if not usuario.get("activo", False):
+            return usuario
+        return self.repo.deactivate("rut_usuario", rut_norm)
+
+    def _administrador_autorizado(self, rut: str) -> Dict:
+        """Devuelve el administrador activo o rechaza la operación."""
+        try:
+            rut_norm = normalizar_rut(rut)
+        except InvalidRUTError:
+            raise AuthorizationError(
+                "Solo administradores autorizados pueden gestionar usuarios"
+            )
+        autorizador = self.repo.get_by_rut(rut_norm)
+        if (
+            not autorizador
+            or not autorizador.get("activo")
+            or autorizador.get("rol") != "Administrador"
+        ):
+            raise AuthorizationError(
+                "Solo administradores autorizados pueden gestionar usuarios"
+            )
+        return autorizador
     
     def verificar_permisos(self, rut: str, requiere_admin: bool = False) -> bool:
         """Verify user permissions."""
@@ -230,4 +281,4 @@ class UsuariosService:
         autoriza = self.consultar_usuario(autorizar_por)
         if not autoriza or not autoriza.get("activo") or autoriza.get("rol") != "Administrador":
             raise AuthorizationError("Solo administradores pueden autorizar cuentas")
-        return self.activar_usuario(rut)
+        return self.activar_usuario(rut, autorizado_por=autorizar_por)
