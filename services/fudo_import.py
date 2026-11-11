@@ -38,7 +38,7 @@ CAMPOS_DESTINO = {
     "cantidad_total": "Cantidad vendida",
     "producto_identificado": "Producto",
 }
-CAMPOS_REQUERIDOS = ("fecha_venta", "total_venta", "producto_identificado")
+CAMPOS_REQUERIDOS = ("fecha_venta", "total_venta")
 
 _CAMPOS_FECHA = ("fecha_venta", "fecha", "Fecha", "fecha de venta", "Fecha Venta")
 _CAMPOS_TOTAL = ("total_venta", "total", "monto", "Total", "Monto", "Total Venta")
