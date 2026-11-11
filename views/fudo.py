@@ -416,8 +416,8 @@ def _render_importar(user: Dict[str, Any]) -> None:
     st.markdown("**Mapeo de columnas**")
     st.caption(
         "Relaciona las columnas del archivo con los campos de INKubiertos. "
-        "La fecha, el total y el producto son obligatorios. La cantidad es "
-        "opcional, pero sin ella no se puede estimar el costo."
+        "La fecha y el total son obligatorios. El producto es opcional "
+        "(se registrará como 'Venta general' si no se asigna)."
     )
 
     usadas: set[str] = set()
