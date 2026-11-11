@@ -482,11 +482,9 @@ class FudoImportService:
 
             producto = _texto(fila.get("producto_identificado"))
             if not producto:
-                errores_fila.append("Falta el nombre del producto.")
+                producto = "Venta general (FUDO)" # Nombre automático si no se mapea la columna
             elif len(producto) > 150:
-                errores_fila.append(
-                    "El nombre del producto supera los 150 caracteres."
-                )
+                errores_fila.append("El nombre del producto supera los 150 caracteres.")
 
             datos_raw = json.loads(
                 json.dumps(
