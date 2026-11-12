@@ -199,7 +199,7 @@ def _formulario_producto(
                 value=str(producto.get("unidad_medida") or "") if producto else "",
                 max_chars=50,
                 key=f"{clave}_unidad",
-                help="Obligatoria. Ejemplos: UN, KG, LT, CAJA.",
+                help="Obligatoria. Opciones permitidas: Unidad, Botella, kg, L (respetar mayúsculas y minúsculas).",
             )
         with col_derecha:
             costo = st.number_input(
