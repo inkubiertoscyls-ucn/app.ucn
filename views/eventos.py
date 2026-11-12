@@ -31,8 +31,8 @@ TODOS = "Todos"
 SIN_TIPO = "Sin tipo"
 SIN_ARTISTA = "Sin artista"
 ESTADOS = [TODOS, "Activos", "Inactivos"]
-TIPOS_SUGERIDOS = ("Concierto", "Festival", "Privado")
-OTRO_TIPO = "Otro tipo…"
+TIPOS_SUGERIDOS = ("Stand-up Comedy", "Música en Vivo", "Noche Temática", "Jornada Normal", "Otro tipo")
+# (borre la constante OTRO_TIPO ya que no la usaremos más)
 
 
 def _normalizar(texto: Any) -> str:
@@ -344,44 +344,21 @@ def _formulario_evento(
                 help="Opcional. El artista se guarda como parte del evento.",
             )
         with col_derecha:
-            tipo_actual = (
-                str(evento.get("tipo_evento") or "").strip() if evento else ""
-            )
+            tipo_actual = str(evento.get("tipo_evento") or "").strip() if evento else ""
             opciones_tipo = list(TIPOS_SUGERIDOS)
             if tipo_actual and tipo_actual not in opciones_tipo:
                 opciones_tipo.append(tipo_actual)
-            opciones_tipo.append(OTRO_TIPO)
-            indice_tipo = (
-                opciones_tipo.index(tipo_actual)
-                if tipo_actual in opciones_tipo
-                else None
-            )
-            tipo_elegido = st.selectbox(
+            
+            indice_tipo = opciones_tipo.index(tipo_actual) if tipo_actual in opciones_tipo else None
+            
+            tipo = st.selectbox(
                 "Tipo de evento",
                 opciones_tipo,
                 index=indice_tipo,
                 placeholder="Selecciona un tipo",
                 key=f"{clave}_tipo",
-                help=(
-                    "Obligatorio. Opciones sugeridas: Concierto, Festival o "
-                    "Privado. Si el evento es de otro tipo, elige «Otro tipo…» "
-                    "y escríbelo (máximo 50 caracteres)."
-                ),
+                help="Obligatorio. Selecciona una categoría válida.",
             )
-            if tipo_elegido == OTRO_TIPO:
-                tipo = st.text_input(
-                    "Especifica el tipo de evento",
-                    value=(
-                        tipo_actual
-                        if tipo_actual and tipo_actual not in TIPOS_SUGERIDOS
-                        else ""
-                    ),
-                    max_chars=50,
-                    key=f"{clave}_tipo_libre",
-                    help="Obligatorio, máximo 50 caracteres.",
-                )
-            else:
-                tipo = str(tipo_elegido or "").strip()
 
             costo = st.number_input(
                 "Costo del artista (CLP)",
