@@ -2,12 +2,15 @@
 Eventos service - Business logic for events and artists.
 
 El artista es un campo del evento (`nombre_artista`), no una entidad separada.
+Cada evento es una visita del artista al local: `fecha_evento` indica el día de
+la presentación y se usa para calcular la rentabilidad por artista.
 Los duplicados exactos de nombre se advierten en la interfaz, pero no se
 bloquean: puede haber ediciones del mismo evento con el mismo nombre.
 """
 from __future__ import annotations
 
 import math
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
 from core.exceptions import NotFoundError, ValidationError
@@ -18,6 +21,7 @@ CAMPOS_EVENTO = (
     "nombre_artista",
     "tipo_evento",
     "costo_artista",
+    "fecha_evento",
     "activo",
 )
 MAX_COSTO_ARTISTA = 99_999_999.99
@@ -109,6 +113,8 @@ class EventosService:
                 valor = str(valor).strip() if valor is not None else ""
             elif campo == "costo_artista":
                 valor = self._numero_no_negativo(valor, campo)
+            elif campo == "fecha_evento":
+                valor = self._fecha_opcional(valor)
             elif campo == "activo":
                 valor = bool(valor)
             datos[campo] = valor
@@ -121,6 +127,27 @@ class EventosService:
             datos.setdefault("activo", True)
 
         return datos
+
+    @staticmethod
+    def _fecha_opcional(valor: Any) -> Optional[str]:
+        """Normaliza la fecha de presentación a texto ISO (AAAA-MM-DD) o None."""
+        if valor is None:
+            return None
+        if isinstance(valor, datetime):
+            return valor.date().isoformat()
+        if isinstance(valor, date):
+            return valor.isoformat()
+        texto = str(valor).strip()
+        if not texto:
+            return None
+        for formato in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+            try:
+                return datetime.strptime(texto[:10], formato).date().isoformat()
+            except ValueError:
+                continue
+        raise ValidationError(
+            "La fecha del evento no es válida. Usa el formato DD/MM/AAAA."
+        )
 
     def _numero_no_negativo(self, valor: Any, campo: str) -> float:
         try:

@@ -4,6 +4,10 @@ Muestra las ventas reales importadas desde FUDO y calcula costo, utilidad y
 margen solo cuando existe producto vinculado, cantidad informada y costo base
 válido. Las ventas sin costo se informan aparte y nunca se presentan como
 utilidad cero. No se calcula rentabilidad por área ni se inventan eventos.
+
+La rentabilidad por artista usa la fecha de presentación de cada evento
+(`fecha_evento`) y las ventas de FUDO de ese mismo día, comparadas con el
+promedio de los días sin evento.
 """
 from __future__ import annotations
 
@@ -21,7 +25,7 @@ from data.errors import ErrorDatos
 from data.permisos import ADMINISTRADOR
 from data.ventas import resumen_rentabilidad
 from ui.feedback import boton_reintentar, cargando, mostrar_error, mostrar_vacio
-from ui.format import fmt_cantidad, fmt_clp, fmt_fecha_larga, fmt_pct
+from ui.format import fmt_cantidad, fmt_clp, fmt_fecha, fmt_fecha_larga, fmt_pct
 from ui.layout import metric_grid, page_header, status_badge
 from ui.state import go
 
@@ -187,6 +191,239 @@ def _graficos(resumen: Dict[str, Any]) -> None:
             st.caption("Se muestran los 10 productos con mayores ventas estimadas.")
         else:
             st.caption("Sin ventas con costo para agrupar por producto.")
+
+
+ESTADOS_VISITA = {
+    "calculado": ("Calculado", "green"),
+    "sin_ventas": ("Sin ventas importadas", "amber"),
+    "programado": ("Programado", "muted"),
+}
+
+
+def _clp_signo(valor: Any) -> str:
+    """Monto con color: verde si gana, rojo si pierde."""
+    if valor is None:
+        return "—"
+    clase = "is-pos" if valor > 0 else "is-neg" if valor < 0 else ""
+    signo = "+" if valor > 0 else ""
+    return f'<span class="ink-delta {clase}">{escape(signo + fmt_clp(valor))}</span>'
+
+
+def _tabla_visitas(visitas: List[Dict[str, Any]]) -> str:
+    cuerpo = []
+    for fila in visitas:
+        etiqueta, tono = ESTADOS_VISITA.get(fila.get("estado"), ("—", "muted"))
+        notas = []
+        if (fila.get("comparte_dia") or 1) > 1:
+            notas.append(f"Día compartido con {fila['comparte_dia'] - 1} evento(s) más")
+        if fila.get("parcial"):
+            notas.append(
+                f"{_clp(fila.get('monto_sin_costo'))} sin costo"
+            )
+        nota_html = (
+            f'<div class="ink-muted">{escape(" · ".join(notas))}</div>' if notas else ""
+        )
+        cuerpo.append(
+            "<tr>"
+            f'<td class="is-date">{escape(fmt_fecha(fila.get("fecha")))}</td>'
+            f'<td><span class="ink-product-name">{escape(str(fila.get("artista")))}</span>'
+            f'<div class="ink-muted">{escape(str(fila.get("evento")))}</div>'
+            f"{status_badge(etiqueta, tono)}{nota_html}</td>"
+            f'<td class="is-num">{escape(_clp(fila.get("ventas")))}</td>'
+            f'<td class="is-num">{escape(_clp(fila.get("utilidad_bruta")))}</td>'
+            f'<td class="is-num">{escape(_clp(fila.get("costo_artista")))}</td>'
+            f'<td class="is-num">{_clp_signo(fila.get("ganancia_dia"))}</td>'
+            f'<td class="is-num">{_clp_signo(fila.get("aporte_ventas"))}</td>'
+            f'<td class="is-num">{_clp_signo(fila.get("ganancia_vs_normal"))}</td>'
+            "</tr>"
+        )
+    return (
+        '<div class="ink-table-wrap">'
+        '<table class="ink-table">'
+        "<thead><tr><th>Fecha</th><th>Artista · evento</th>"
+        "<th class='is-num'>Ventas</th>"
+        "<th class='is-num'>Utilidad</th>"
+        "<th class='is-num'>Pago artista</th>"
+        "<th class='is-num'>Ganancia</th>"
+        "<th class='is-num'>Ventas vs. normal</th>"
+        "<th class='is-num'>Ganancia vs. normal</th>"
+        "</tr></thead>"
+        f'<tbody>{"".join(cuerpo)}</tbody>'
+        "</table>"
+        "</div>"
+    )
+
+
+def _tabla_por_artista(artistas: List[Dict[str, Any]]) -> str:
+    cuerpo = []
+    for fila in artistas:
+        visitas = int(fila.get("visitas") or 0)
+        calculadas = int(fila.get("visitas_calculadas") or 0)
+        detalle_visitas = (
+            f"{calculadas} de {visitas}" if calculadas != visitas else str(visitas)
+        )
+        cuerpo.append(
+            "<tr>"
+            f'<td><span class="ink-product-name">{escape(str(fila.get("artista")))}</span>'
+            + (
+                f'<div class="ink-muted">{escape(fmt_fecha(fila.get("ultima_fecha")))}</div>'
+                if fila.get("ultima_fecha")
+                else ""
+            )
+            + "</td>"
+            + "<td>"
+            + (
+                status_badge("Parcial", "amber")
+                if fila.get("parcial")
+                else status_badge("Completa", "green")
+                if fila.get("visitas_calculadas")
+                else status_badge("Sin datos", "muted")
+            )
+            + "</td>"
+            f'<td class="is-num">{escape(detalle_visitas)}</td>'
+            f'<td class="is-num">{escape(_clp(fila.get("ventas")))}</td>'
+            f'<td class="is-num">{_clp_signo(fila.get("aporte_ventas"))}</td>'
+            f'<td class="is-num">{escape(_clp(fila.get("costo_artista")))}</td>'
+            f'<td class="is-num">{_clp_signo(fila.get("ganancia_dia"))}</td>'
+            f'<td class="is-num">{_clp_signo(fila.get("ganancia_vs_normal"))}</td>'
+            "</tr>"
+        )
+    return (
+        '<div class="ink-table-wrap">'
+        '<table class="ink-table">'
+        "<thead><tr><th>Artista</th>"
+        "<th title='Parcial: algunas ventas del día no tienen costo estimable'>Datos</th>"
+        "<th class='is-num'>Visitas</th>"
+        "<th class='is-num'>Ventas</th>"
+        "<th class='is-num'>Ventas vs. normal</th>"
+        "<th class='is-num'>Pago artista</th>"
+        "<th class='is-num'>Ganancia</th>"
+        "<th class='is-num'>Ganancia vs. normal</th>"
+        "</tr></thead>"
+        f'<tbody>{"".join(cuerpo)}</tbody>'
+        "</table>"
+        "</div>"
+    )
+
+
+def _seccion_artistas(datos: Optional[Dict[str, Any]], filtro_evento: bool) -> None:
+    """Rentabilidad de cada visita de artista según las ventas de ese día."""
+    st.markdown("### Rentabilidad por artista")
+
+    if filtro_evento or datos is None:
+        st.info(
+            "La rentabilidad por artista se calcula con todas las ventas del "
+            "período. Selecciona «Todos los eventos» para verla."
+        )
+        return
+
+    if not datos.get("columna_disponible"):
+        st.warning(
+            "Falta la fecha de presentación en los eventos. Ejecuta la migración "
+            "`db/migrations/006_add_fecha_evento.sql` en Supabase y luego registra "
+            "la fecha de cada evento en «Artistas y eventos»."
+        )
+        return
+
+    sin_fecha = int(datos.get("eventos_sin_fecha") or 0)
+    if sin_fecha:
+        st.caption(
+            f"{sin_fecha} evento(s) no tienen fecha de presentación y no se "
+            "incluyen. Complétala en «Artistas y eventos»."
+        )
+
+    visitas = datos.get("visitas") or []
+    if not visitas:
+        mostrar_vacio(
+            "No hay presentaciones de artistas en el período seleccionado. "
+            "Registra la fecha de cada evento en «Artistas y eventos»."
+        )
+        if st.button("Ir a Artistas y eventos", key="rent_ir_eventos"):
+            go("eventos")
+        return
+
+    dias_normales = int(datos.get("dias_normales") or 0)
+    metric_grid(
+        [
+            {
+                "label": "Presentaciones calculadas",
+                "value": fmt_cantidad(datos.get("visitas_calculadas")),
+                "hint": f"De {len(visitas)} en el período, con ventas importadas ese día.",
+                "tone": "wine",
+            },
+            {
+                "label": "Ganancia del día",
+                "value": _clp(datos.get("ganancia_dia_total")),
+                "hint": "Utilidad estimada de esos días menos el costo de los artistas.",
+                "tone": "green",
+            },
+            {
+                "label": "Ganancia vs. día normal",
+                "value": _clp(datos.get("ganancia_vs_normal_total")),
+                "hint": "Lo que los artistas dejaron por sobre un día sin evento.",
+                "tone": "default",
+            },
+            {
+                "label": "Ventas de un día normal",
+                "value": _clp(datos.get("promedio_ventas_dia_normal")),
+                "hint": (
+                    f"Promedio de {dias_normales} día(s) sin evento del período."
+                    if dias_normales
+                    else "No hay días sin evento para comparar."
+                ),
+                "tone": "muted",
+            },
+        ]
+    )
+
+    st.markdown(
+        '<div class="ink-data-note">'
+        "<b>Ganancia del día</b> = utilidad estimada de las ventas de FUDO de esa "
+        "fecha − costo del artista. <b>Ganancia vs. día normal</b> = (utilidad "
+        "del día − utilidad promedio de los días sin evento) − costo del artista: "
+        "es lo que el artista aporta por sobre un día corriente. La utilidad usa "
+        "el costo base actual y solo las ventas con producto vinculado; si un día "
+        "tiene muchas ventas sin vincular, la utilidad queda subestimada. Las "
+        "ventas después de medianoche se registran con la fecha siguiente."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    por_artista = datos.get("por_artista") or []
+    graficables = [fila for fila in por_artista if fila.get("ganancia_dia") is not None]
+    if graficables:
+        st.markdown("**Ganancia del día por artista**")
+        grafico = pd.DataFrame(
+            [
+                {
+                    "Artista": str(fila.get("artista")),
+                    "Ganancia del día": float(fila.get("ganancia_dia") or 0),
+                }
+                for fila in graficables
+            ]
+        )
+        st.bar_chart(
+            grafico.set_index("Artista"),
+            horizontal=True,
+            color="#800020",
+            height=max(160, 56 * len(graficables) + 60),
+            width="stretch",
+        )
+
+    with st.expander("Resumen por artista", expanded=True):
+        st.markdown(_tabla_por_artista(por_artista), unsafe_allow_html=True)
+        st.caption(
+            "«Pago artista» = costo del artista. «Ganancia» = ganancia del día. "
+            "«vs. normal» = diferencia frente al promedio de un día sin evento."
+        )
+        if any(fila.get("parcial") for fila in por_artista):
+            st.caption(
+                "«Parcial»: parte de las ventas de ese día no tiene producto "
+                "vinculado o costo base, así que su utilidad no se pudo estimar "
+                "y la ganancia aparece menor. Vincúlalas en «Ventas de FUDO»."
+            )
+    with st.expander(f"Detalle por presentación ({len(visitas)})", expanded=False):
+        st.markdown(_tabla_visitas(visitas), unsafe_allow_html=True)
 
 
 def render_rentabilidad() -> None:
@@ -422,6 +659,9 @@ def render_rentabilidad() -> None:
                 _tabla_sin_costo(detalle_sin_costo),
                 unsafe_allow_html=True,
             )
+
+    st.markdown("---")
+    _seccion_artistas(resumen.get("artistas"), evento_filtro is not None)
 
     eventos_agrupados = resumen.get("eventos") or []
     eventos_con_id = [

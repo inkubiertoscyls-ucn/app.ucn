@@ -20,7 +20,12 @@ from repositories.fechas import FechasRepository
 from repositories.movimientos import MovimientosRepository
 
 
-@cache_datos(ttl=30)
+# Las escrituras de la app limpian la caché al instante; este TTL solo acota
+# cuánto tarda en verse un cambio hecho fuera de la app (p. ej. en Supabase).
+REFRESCO_SEGUNDOS = 15
+
+
+@cache_datos(ttl=REFRESCO_SEGUNDOS)
 def _movimientos_snapshot() -> List[Dict[str, Any]]:
     """Movimientos mínimos para calcular stock y contadores (una consulta)."""
     try:
@@ -29,12 +34,12 @@ def _movimientos_snapshot() -> List[Dict[str, Any]]:
         raise como_error(exc) from exc
 
 
-@cache_datos(ttl=30)
+@cache_datos(ttl=REFRESCO_SEGUNDOS)
 def _resumen_snapshot() -> Dict[Tuple[int, int], Dict[str, float]]:
     return resumir_movimientos(_movimientos_snapshot())
 
 
-@cache_datos(ttl=30)
+@cache_datos(ttl=REFRESCO_SEGUNDOS)
 def _stock_snapshot() -> Dict[Tuple[int, int], float]:
     return {
         llave: datos["stock"]

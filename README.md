@@ -83,5 +83,10 @@ Las pruebas usan datos ficticios y no escriben en Supabase.
 - **Permisos**: `Administrador` y `Operario`. La sesión se revalida cada minuto contra la base de
   datos y se cierra tras el tiempo de inactividad configurado.
 - **Login**: tras 5 intentos fallidos para un mismo RUT se bloquea durante 5 minutos.
+- **Rentabilidad por artista**: cada evento guarda la fecha de presentación del artista
+  (`fecha_evento`, migración `006_add_fecha_evento.sql`). En *Rentabilidad* se calcula, para
+  cada presentación, la ganancia del día (utilidad estimada de las ventas de FUDO de esa fecha
+  menos el costo del artista) y la ganancia frente a un día normal (comparada con el promedio
+  de los días sin evento).
 - **FUDO**: los duplicados se detectan por fecha, total, cantidad y producto; si el archivo trae
   número de venta, ticket, comanda u hora, también se usan para distinguir ventas iguales.

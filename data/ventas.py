@@ -11,6 +11,7 @@ import math
 from datetime import date, datetime
 from typing import Any, Dict, Iterable, List, Optional
 
+from core.tiempo import hoy_chile
 from data.cache import cache_datos, limpiar_cache
 from data.catalogos import listar_eventos
 from data.errors import (
@@ -526,6 +527,269 @@ def calcular_resumen_rentabilidad(
     }
 
 
+SIN_ARTISTA = "Sin artista"
+
+
+def _dia_vacio() -> Dict[str, Any]:
+    return {
+        "registros": 0,
+        "ventas": 0.0,
+        "ventas_con_costo": 0.0,
+        "costo": 0.0,
+        "utilidad": 0.0,
+        "monto_sin_costo": 0.0,
+    }
+
+
+def _resumen_por_dia(
+    ventas: Iterable[Dict[str, Any]],
+    productos: Optional[Iterable[Dict[str, Any]]],
+) -> Dict[str, Dict[str, Any]]:
+    """Ventas, costo y utilidad estimada de cada día con ventas importadas.
+
+    Usa la misma regla que el resumen general: la utilidad solo se estima
+    para ventas con producto vinculado, cantidad positiva y costo base válido.
+    El resto suma a las ventas del día y se informa como monto sin costo.
+    """
+    costos: Dict[int, Optional[float]] = {}
+    for producto in productos or []:
+        id_producto = _entero(producto.get("id_producto"))
+        if id_producto is not None:
+            costos[id_producto] = _costo_valido(producto.get("costo_base"))
+
+    dias: Dict[str, Dict[str, Any]] = {}
+    for venta in ventas:
+        fecha = _fecha_texto(venta.get("fecha_venta"))
+        if not fecha:
+            continue
+        dia = dias.setdefault(fecha, _dia_vacio())
+        dia["registros"] += 1
+
+        total = _monto(venta.get("total_venta"))
+        if total is None:
+            continue
+        dia["ventas"] += total
+
+        cantidad = _monto(venta.get("cantidad_total"))
+        id_producto = _entero(venta.get("id_producto_relacionado"))
+        costo_base = costos.get(id_producto) if id_producto is not None else None
+        if costo_base is None or cantidad is None or cantidad <= 0:
+            dia["monto_sin_costo"] += total
+            continue
+
+        costo = costo_base * cantidad
+        dia["ventas_con_costo"] += total
+        dia["costo"] += costo
+        dia["utilidad"] += total - costo
+
+    return dias
+
+
+def _redondear(valor: Optional[float]) -> Optional[float]:
+    return None if valor is None else round(float(valor), 2)
+
+
+def calcular_rentabilidad_artistas(
+    ventas: Iterable[Dict[str, Any]],
+    productos: Optional[Iterable[Dict[str, Any]]] = None,
+    eventos: Optional[Iterable[Dict[str, Any]]] = None,
+    *,
+    desde: Any = None,
+    hasta: Any = None,
+    hoy: Any = None,
+) -> Dict[str, Any]:
+    """Rentabilidad de cada visita de artista según las ventas de ese día.
+
+    Para cada evento con `fecha_evento` dentro del período:
+
+    - **Ganancia del día** = utilidad estimada de las ventas de esa fecha
+      menos el costo del artista.
+    - **Ganancia frente a un día normal** = (utilidad del día menos la
+      utilidad promedio de los días sin evento) menos el costo del artista.
+      Es lo que el artista aporta por sobre un día corriente.
+
+    Si dos o más eventos comparten la misma fecha, las ventas del día se
+    reparten en partes iguales entre ellos. Función pura: no consulta la BD.
+    """
+    lista_eventos = list(eventos or [])
+    desde_texto = _fecha_texto(desde)
+    hasta_texto = _fecha_texto(hasta)
+    hoy_texto = _fecha_texto(hoy)
+
+    dias = _resumen_por_dia(ventas, productos)
+
+    columna_disponible = any("fecha_evento" in evento for evento in lista_eventos)
+    eventos_sin_fecha = 0
+    en_periodo: List[Dict[str, Any]] = []
+    for evento in lista_eventos:
+        fecha = _fecha_texto(evento.get("fecha_evento"))
+        if not fecha:
+            eventos_sin_fecha += 1
+            continue
+        if desde_texto and fecha < desde_texto:
+            continue
+        if hasta_texto and fecha > hasta_texto:
+            continue
+        en_periodo.append({**evento, "_fecha": fecha})
+
+    # Todas las fechas con evento (aunque el evento esté fuera del período o
+    # inactivo) se excluyen del promedio de "día normal".
+    fechas_con_evento = {
+        _fecha_texto(evento.get("fecha_evento"))
+        for evento in lista_eventos
+        if _fecha_texto(evento.get("fecha_evento"))
+    }
+    eventos_por_fecha: Dict[str, int] = {}
+    for evento in en_periodo:
+        eventos_por_fecha[evento["_fecha"]] = eventos_por_fecha.get(evento["_fecha"], 0) + 1
+
+    dias_normales = [
+        datos for fecha, datos in dias.items() if fecha not in fechas_con_evento
+    ]
+    promedio_ventas = (
+        sum(dia["ventas"] for dia in dias_normales) / len(dias_normales)
+        if dias_normales
+        else None
+    )
+    promedio_utilidad = (
+        sum(dia["utilidad"] for dia in dias_normales) / len(dias_normales)
+        if dias_normales
+        else None
+    )
+
+    visitas: List[Dict[str, Any]] = []
+    for evento in en_periodo:
+        fecha = evento["_fecha"]
+        artista = str(evento.get("nombre_artista") or "").strip() or SIN_ARTISTA
+        costo_artista = _monto(evento.get("costo_artista")) or 0.0
+        compartido = eventos_por_fecha.get(fecha, 1)
+        parte = 1 / compartido
+        dia = dias.get(fecha)
+
+        visita: Dict[str, Any] = {
+            "id_evento": _entero(evento.get("id_evento")),
+            "fecha": fecha,
+            "artista": artista,
+            "evento": str(evento.get("nombre_evento") or "").strip() or "Sin nombre",
+            "costo_artista": round(costo_artista, 2),
+            "comparte_dia": compartido,
+            "ventas": None,
+            "costo_mercaderia": None,
+            "utilidad_bruta": None,
+            "ganancia_dia": None,
+            "aporte_ventas": None,
+            "ganancia_vs_normal": None,
+            "monto_sin_costo": None,
+            "parcial": False,
+        }
+
+        if hoy_texto and fecha > hoy_texto:
+            visita["estado"] = "programado"
+        elif dia is None:
+            visita["estado"] = "sin_ventas"
+        else:
+            visita["estado"] = "calculado"
+            utilidad = dia["utilidad"] * parte
+            visita["ventas"] = _redondear(dia["ventas"] * parte)
+            visita["costo_mercaderia"] = _redondear(dia["costo"] * parte)
+            visita["utilidad_bruta"] = _redondear(utilidad)
+            visita["ganancia_dia"] = _redondear(utilidad - costo_artista)
+            visita["monto_sin_costo"] = _redondear(dia["monto_sin_costo"] * parte)
+            visita["parcial"] = dia["monto_sin_costo"] > 0
+            if promedio_ventas is not None and promedio_utilidad is not None:
+                visita["aporte_ventas"] = _redondear(
+                    (dia["ventas"] - promedio_ventas) * parte
+                )
+                visita["ganancia_vs_normal"] = _redondear(
+                    (dia["utilidad"] - promedio_utilidad) * parte - costo_artista
+                )
+        visitas.append(visita)
+
+    visitas.sort(key=lambda fila: (fila["fecha"], fila["artista"].casefold()), reverse=True)
+
+    por_artista: Dict[str, Dict[str, Any]] = {}
+    for visita in visitas:
+        grupo = por_artista.setdefault(
+            visita["artista"],
+            {
+                "artista": visita["artista"],
+                "visitas": 0,
+                "visitas_calculadas": 0,
+                "ultima_fecha": None,
+                "ventas": 0.0,
+                "utilidad_bruta": 0.0,
+                "costo_artista": 0.0,
+                "ganancia_dia": 0.0,
+                "aporte_ventas": None,
+                "ganancia_vs_normal": None,
+                "parcial": False,
+            },
+        )
+        grupo["visitas"] += 1
+        if visita["estado"] == "programado":
+            continue
+        if grupo["ultima_fecha"] is None or visita["fecha"] > grupo["ultima_fecha"]:
+            grupo["ultima_fecha"] = visita["fecha"]
+        if visita["estado"] != "calculado":
+            continue
+        grupo["visitas_calculadas"] += 1
+        grupo["ventas"] += visita["ventas"] or 0.0
+        grupo["utilidad_bruta"] += visita["utilidad_bruta"] or 0.0
+        grupo["costo_artista"] += visita["costo_artista"]
+        grupo["ganancia_dia"] += visita["ganancia_dia"] or 0.0
+        grupo["parcial"] = grupo["parcial"] or visita["parcial"]
+        if visita["aporte_ventas"] is not None:
+            grupo["aporte_ventas"] = (
+                grupo["aporte_ventas"] or 0.0
+            ) + visita["aporte_ventas"]
+        if visita["ganancia_vs_normal"] is not None:
+            grupo["ganancia_vs_normal"] = (
+                grupo["ganancia_vs_normal"] or 0.0
+            ) + visita["ganancia_vs_normal"]
+
+    artistas = []
+    for grupo in por_artista.values():
+        calculadas = grupo["visitas_calculadas"]
+        for campo in ("ventas", "utilidad_bruta", "costo_artista", "ganancia_dia"):
+            grupo[campo] = _redondear(grupo[campo]) if calculadas else None
+        grupo["ganancia_vs_normal"] = _redondear(grupo["ganancia_vs_normal"])
+        grupo["aporte_ventas"] = _redondear(grupo["aporte_ventas"])
+        grupo["promedio_por_visita"] = (
+            round(grupo["ganancia_dia"] / calculadas, 2) if calculadas else None
+        )
+        artistas.append(grupo)
+    artistas.sort(
+        key=lambda fila: (
+            fila["ganancia_dia"] is None,
+            -(fila["ganancia_dia"] or 0.0),
+            fila["artista"].casefold(),
+        )
+    )
+
+    calculadas = [visita for visita in visitas if visita["estado"] == "calculado"]
+    return {
+        "columna_disponible": columna_disponible,
+        "eventos_sin_fecha": eventos_sin_fecha,
+        "visitas": visitas,
+        "por_artista": artistas,
+        "visitas_calculadas": len(calculadas),
+        "dias_normales": len(dias_normales),
+        "promedio_ventas_dia_normal": _redondear(promedio_ventas),
+        "promedio_utilidad_dia_normal": _redondear(promedio_utilidad),
+        "ventas_con_artista": _redondear(
+            sum(visita["ventas"] or 0.0 for visita in calculadas)
+        ) if calculadas else None,
+        "ganancia_dia_total": _redondear(
+            sum(visita["ganancia_dia"] or 0.0 for visita in calculadas)
+        ) if calculadas else None,
+        "ganancia_vs_normal_total": _redondear(
+            sum(visita["ganancia_vs_normal"] for visita in calculadas)
+        ) if calculadas and all(
+            visita["ganancia_vs_normal"] is not None for visita in calculadas
+        ) else None,
+    }
+
+
 @cache_datos(ttl=60)
 def _resumen(
     desde: Optional[str],
@@ -544,12 +808,27 @@ def _resumen(
     except Exception as exc:
         raise como_error(exc) from exc
 
-    return calcular_resumen_rentabilidad(
+    resumen = calcular_resumen_rentabilidad(
         ventas,
         productos,
         eventos,
         truncado=len(ventas) >= LIMITE_RENTABILIDAD,
     )
+    # Con un filtro por evento las ventas ya vienen recortadas: el día normal
+    # no se podría calcular, así que el análisis por artista se omite.
+    resumen["artistas"] = (
+        calcular_rentabilidad_artistas(
+            ventas,
+            productos,
+            eventos,
+            desde=desde,
+            hasta=hasta,
+            hoy=hoy_chile(),
+        )
+        if id_evento is None
+        else None
+    )
+    return resumen
 
 
 def resumen_rentabilidad(

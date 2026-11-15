@@ -68,8 +68,8 @@ def sidebar_navigation() -> None:
 
         st.markdown('<div class="ink-sidebar-label">Navegación</div>', unsafe_allow_html=True)
         _nav_button("Inicio", "inicio", active_page == "inicio")
-        _nav_button("Inventario", "inventario", active_page == "inventario")
         _nav_button("Movimientos", "movimientos", active_page == "movimientos")
+        _nav_button("Inventario", "inventario", active_page == "inventario")
         _nav_button("Alertas", "alertas", active_page == "alertas")
 
         if rol == "Administrador":

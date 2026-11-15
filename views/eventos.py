@@ -1,19 +1,21 @@
 """Administración de artistas y eventos de INKubiertos.
 
 El artista es un campo del evento (`nombre_artista`): no se crea una entidad
-separada. Las fechas que se muestran se derivan de ventas y movimientos ya
-vinculados; esta pantalla no crea ni modifica esas relaciones.
+separada. Cada evento es una visita del artista al local y guarda su fecha de
+presentación (`fecha_evento`), que usa la rentabilidad por artista.
 """
 from __future__ import annotations
 
 import unicodedata
+from datetime import date
 from html import escape
 from typing import Any, Dict, List, Optional
 
 import streamlit as st
 
 from core.exceptions import AuthorizationError
-from data.errors import ErrorDatos
+from core.tiempo import hoy_chile
+from data.errors import ESQUEMA, ErrorDatos
 from data.eventos import (
     actividad_eventos_admin,
     cambiar_estado_evento,
@@ -51,9 +53,26 @@ def _artista(fila: Dict[str, Any]) -> str:
     return str(fila.get("nombre_artista") or "").strip() or SIN_ARTISTA
 
 
+def _fecha(fila: Dict[str, Any]) -> str:
+    """Fecha de presentación en formato ISO, o texto vacío si no tiene."""
+    return str(fila.get("fecha_evento") or "")[:10]
+
+
+def _fecha_como_date(valor: Any) -> Optional[date]:
+    texto = str(valor or "")[:10]
+    try:
+        return date.fromisoformat(texto) if texto else None
+    except ValueError:
+        return None
+
+
 def _orden(fila: Dict[str, Any]) -> tuple:
+    """Activos primero; luego los de fecha más reciente; sin fecha al final."""
+    fecha = _fecha_como_date(fila.get("fecha_evento"))
     return (
         0 if fila.get("activo") else 1,
+        0 if fecha else 1,
+        -fecha.toordinal() if fecha else 0,
         str(fila.get("nombre_evento") or "").casefold(),
     )
 
@@ -130,7 +149,11 @@ def filtrar_eventos(
 
 
 def agrupar_artistas(eventos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Agrupa los eventos por `nombre_artista` para la vista derivada."""
+    """Agrupa los eventos por `nombre_artista` para la vista derivada.
+
+    Incluye la última presentación ya realizada y la próxima programada.
+    """
+    hoy = hoy_chile().isoformat()
     grupos: Dict[str, Dict[str, Any]] = {}
     for fila in eventos:
         artista = _artista(fila)
@@ -142,9 +165,18 @@ def agrupar_artistas(eventos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "activos": 0,
                 "costo_total": 0.0,
                 "tipos": set(),
+                "ultima_visita": None,
+                "proxima_visita": None,
             },
         )
         grupo["eventos"] += 1
+        fecha = _fecha(fila)
+        if fecha:
+            if fecha <= hoy:
+                if grupo["ultima_visita"] is None or fecha > grupo["ultima_visita"]:
+                    grupo["ultima_visita"] = fecha
+            elif grupo["proxima_visita"] is None or fecha < grupo["proxima_visita"]:
+                grupo["proxima_visita"] = fecha
         if fila.get("activo"):
             grupo["activos"] += 1
         grupo["costo_total"] += _numero(fila.get("costo_artista"))
@@ -249,8 +281,11 @@ def _tabla_eventos(
         )
         costo = fila.get("costo_artista")
         costo_texto = "—" if costo is None else fmt_clp(costo)
+        fecha = _fecha(fila)
+        fecha_texto = fmt_fecha(fecha) if fecha else "Sin fecha"
         cuerpo.append(
             "<tr>"
+            f'<td class="is-date">{escape(fecha_texto)}</td>'
             f'<td><span class="ink-product-name">'
             f'{escape(str(fila.get("nombre_evento") or "Sin nombre"))}</span></td>'
             f"<td>{escape(_artista(fila))}</td>"
@@ -265,7 +300,7 @@ def _tabla_eventos(
         '<div class="ink-table-wrap">'
         '<table class="ink-table">'
         "<thead><tr>"
-        "<th>Evento</th><th>Artista</th><th>Tipo</th>"
+        "<th>Fecha</th><th>Evento</th><th>Artista</th><th>Tipo</th>"
         "<th class='is-num'>Costo artista</th>"
         "<th>Actividad vinculada</th><th>Estado</th>"
         "</tr></thead>"
@@ -287,10 +322,14 @@ def _tabla_artistas(artistas: List[Dict[str, Any]]) -> str:
                 "Con eventos activos" if activos else "Solo historial",
                 "green" if activos else "muted",
             )
+        ultima = grupo.get("ultima_visita")
+        proxima = grupo.get("proxima_visita")
         cuerpo.append(
             "<tr>"
             f'<td><span class="ink-product-name">'
             f'{escape(str(grupo.get("artista") or SIN_ARTISTA))}</span></td>'
+            f'<td class="is-date">{escape(fmt_fecha(ultima) if ultima else "—")}</td>'
+            f'<td class="is-date">{escape(fmt_fecha(proxima) if proxima else "—")}</td>'
             f'<td class="is-num">{escape(str(eventos))}</td>'
             f'<td class="is-num">{escape(str(activos))}</td>'
             f'<td class="is-num">{escape(str(grupo.get("tipos") or 0))}</td>'
@@ -303,7 +342,8 @@ def _tabla_artistas(artistas: List[Dict[str, Any]]) -> str:
         '<div class="ink-table-wrap">'
         '<table class="ink-table">'
         "<thead><tr>"
-        "<th>Artista</th><th class='is-num'>Eventos</th>"
+        "<th>Artista</th><th>Última visita</th><th>Próxima visita</th>"
+        "<th class='is-num'>Eventos</th>"
         "<th class='is-num'>Activos</th><th class='is-num'>Tipos</th>"
         "<th class='is-num'>Costo registrado</th><th>Estado</th>"
         "</tr></thead>"
@@ -342,6 +382,17 @@ def _formulario_evento(
                 max_chars=150,
                 key=f"{clave}_artista",
                 help="Opcional. El artista se guarda como parte del evento.",
+            )
+            fecha_evento = st.date_input(
+                "Fecha de presentación",
+                value=_fecha_como_date(evento.get("fecha_evento")) if evento else None,
+                format="DD/MM/YYYY",
+                key=f"{clave}_fecha",
+                help=(
+                    "Día en que el artista se presenta en el local. Se usa para "
+                    "calcular su rentabilidad con las ventas de FUDO de ese día. "
+                    "Si el artista vuelve otro día, registra un evento nuevo."
+                ),
             )
         with col_derecha:
             tipo_actual = (
@@ -393,12 +444,6 @@ def _formulario_evento(
                 help="Costo acordado con el artista. No modifica ventas históricas.",
             )
 
-        if editar:
-            st.caption(
-                "El evento no tiene campo de fecha propio. Las fechas visibles "
-                "se derivan de ventas y movimientos ya vinculados."
-            )
-
         enviado = st.form_submit_button(
             "Guardar cambios" if editar else "Registrar evento",
             type="primary",
@@ -414,6 +459,11 @@ def _formulario_evento(
         "tipo_evento": tipo,
         "costo_artista": costo,
     }
+    # Se envía la fecha si se eligió una, o si el evento ya tiene la columna
+    # (para poder borrarla). Así registrar eventos sin fecha sigue funcionando
+    # aunque aún no se haya ejecutado la migración 006.
+    if fecha_evento is not None or (evento and "fecha_evento" in evento):
+        datos["fecha_evento"] = fecha_evento
 
     excluir = int(evento["id_evento"]) if editar and evento else None
     duplicados = _duplicados(nombre, eventos, exclude_id=excluir)
@@ -428,7 +478,17 @@ def _formulario_evento(
             else:
                 registrar_evento(datos, usuario=usuario)
                 accion = "quedó registrado"
-    except (ErrorDatos, AuthorizationError) as exc:
+    except ErrorDatos as exc:
+        if exc.tipo == ESQUEMA and "fecha_evento" in datos:
+            st.error(
+                "La base de datos aún no tiene la columna de fecha del evento. "
+                "Ejecuta la migración db/migrations/006_add_fecha_evento.sql en "
+                "Supabase e inténtalo nuevamente."
+            )
+        else:
+            mostrar_error(exc, prefijo="No se pudo guardar el evento.")
+        return
+    except AuthorizationError as exc:
         mostrar_error(exc, prefijo="No se pudo guardar el evento.")
         return
     except Exception:
@@ -456,6 +516,7 @@ def _panel_edicion(
         "Evento a editar",
         eventos,
         format_func=lambda fila: (
+            f"{fmt_fecha(_fecha(fila)) if _fecha(fila) else 'Sin fecha'} · "
             f"{fila.get('nombre_evento') or 'Sin nombre'} · "
             f"{_artista(fila)} · "
             f"{'Activo' if fila.get('activo') else 'Inactivo'}"
@@ -607,8 +668,10 @@ def render_eventos() -> None:
         unsafe_allow_html=True,
     )
     st.caption(
-        "El evento no tiene una fecha propia: las fechas de actividad se derivan "
-        "de ventas y movimientos ya vinculados. El artista es un campo del evento."
+        "Cada evento es una presentación de un artista en el local: registra su "
+        "fecha para calcular la rentabilidad del artista con las ventas de ese "
+        "día (ver Rentabilidad). La actividad vinculada se deriva de ventas y "
+        "movimientos que ya tienen el evento asignado."
     )
 
     try:
@@ -670,7 +733,7 @@ def render_eventos() -> None:
             st.markdown(
                 '<div class="ink-table-meta">'
                 f"<span>{len(filtrados)} de {len(eventos)} eventos</span>"
-                "<span>Las fechas se derivan de ventas y movimientos</span>"
+                "<span>Ordenados por fecha de presentación</span>"
                 "</div>",
                 unsafe_allow_html=True,
             )

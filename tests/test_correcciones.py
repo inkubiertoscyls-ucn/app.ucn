@@ -181,3 +181,30 @@ def test_revalidar_no_expulsa_por_corte_de_red(monkeypatch):
     repo.get_by_rut.side_effect = ConnectionError("sin red")
     monkeypatch.setattr("repositories.usuarios.UsuariosRepository", lambda: repo)
     assert ui.state._revalidar_usuario({"rut_usuario": "111111111"}) is None
+
+
+# --- Menú lateral -------------------------------------------------------------
+
+def test_menu_inventario_va_despues_de_movimientos_y_antes_de_alertas():
+    from pathlib import Path
+
+    from streamlit.testing.v1 import AppTest
+
+    app = AppTest.from_file(
+        str(Path(__file__).resolve().parents[1] / "app.py"), default_timeout=30
+    )
+    app.session_state["logged_in"] = True
+    app.session_state["user"] = {
+        "rut_usuario": "111111111",
+        "nombre_usuario": "Operario",
+        "rol": "Operario",
+        "area_asignada": "Cocina",
+        "activo": True,
+    }
+    # "usuarios" se detiene por permisos antes de consultar datos; el menú
+    # lateral se dibuja igual.
+    app.session_state["page"] = "usuarios"
+    app.run()
+
+    etiquetas = [boton.label for boton in app.sidebar.button]
+    assert etiquetas[:4] == ["Inicio", "Movimientos", "Inventario", "Alertas"]

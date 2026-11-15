@@ -54,7 +54,9 @@ Las migraciones **no** se ejecutan automáticamente.
 3. **Seguridad:** con `SUPABASE_SERVICE_ROLE_KEY` ya configurada, ejecutar
    `005_enable_rls.sql`. Activa RLS en todas las tablas para que la clave pública no pueda
    leer ni modificar datos.
-4. Verificar con `python scripts/verificar_conexion.py`.
+4. **Rentabilidad por artista:** ejecutar `006_add_fecha_evento.sql` para agregar la fecha
+   de presentación a `dim_evento`.
+5. Verificar con `python scripts/verificar_conexion.py`.
 
 ### 6. Crear el primer administrador
 ```bash

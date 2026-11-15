@@ -13,7 +13,8 @@ import streamlit as st
 
 from core.exceptions import AuthorizationError
 from data.errors import ErrorDatos
-from data.inventario import filtrar_inventario, inventario_visible
+from core.tiempo import ahora_chile
+from data.inventario import REFRESCO_SEGUNDOS, filtrar_inventario, inventario_visible
 from ui.feedback import boton_reintentar, cargando, mostrar_error, mostrar_vacio
 from ui.format import area_visible, fmt_cantidad
 from ui.layout import page_header, status_badge
@@ -109,6 +110,17 @@ def render_inventario() -> None:
         "negativos restan. «Ajustes» muestra el neto con signo."
     )
 
+    _contenido_inventario(user, es_admin, area)
+
+
+@st.fragment(run_every=REFRESCO_SEGUNDOS)
+def _contenido_inventario(user: Dict[str, Any], es_admin: bool, area: str) -> None:
+    """Tabla del inventario. Se vuelve a calcular sola cada pocos segundos.
+
+    Así, si alguien registra movimientos (en esta u otra sesión) mientras la
+    pantalla está abierta, el stock se actualiza sin recargar la página. Solo
+    se repite este bloque: los filtros escritos se conservan.
+    """
     try:
         with cargando("Cargando inventario…"):
             filas = inventario_visible(usuario=user)
@@ -165,7 +177,9 @@ def render_inventario() -> None:
     st.markdown(
         '<div class="ink-table-meta">'
         f"<span>{len(filtradas)} de {len(filas)} productos</span>"
-        f"<span>{escape(detalle_stock)}</span>"
+        f"<span>{escape(detalle_stock)} Actualizado a las "
+        f"{ahora_chile().strftime('%H:%M:%S')} · se actualiza solo cada "
+        f"{REFRESCO_SEGUNDOS} s.</span>"
         "</div>",
         unsafe_allow_html=True,
     )

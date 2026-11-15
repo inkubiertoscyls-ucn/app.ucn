@@ -34,7 +34,7 @@ EXPECTED_SCHEMA = {
     ],
     "dim_evento": [
         "id_evento", "nombre_evento", "nombre_artista",
-        "tipo_evento", "costo_artista", "activo"
+        "tipo_evento", "costo_artista", "fecha_evento", "activo"
     ],
     "hecho_inventario": [
         "id_hecho_inventario", "id_fecha", "id_producto",
