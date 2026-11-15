@@ -1,8 +1,7 @@
 """
 Movimientos de inventario repository.
 """
-from typing import List, Dict, Optional
-from datetime import date
+from typing import List, Dict
 from .base import BaseRepository
 
 
@@ -90,17 +89,14 @@ class MovimientosRepository(BaseRepository):
                 id_tipo_movimiento: int = None, rut_usuario: str = None,
                 id_fecha_desde: int = None, id_fecha_hasta: int = None) -> List[Dict]:
         """Filter movements."""
-        try:
-            return self.buscar_historial(
-                id_producto=id_producto,
-                id_area=id_area,
-                id_tipo_movimiento=id_tipo_movimiento,
-                rut_usuario=rut_usuario,
-                id_fecha_desde=id_fecha_desde,
-                id_fecha_hasta=id_fecha_hasta,
-            )
-        except Exception:
-            return []
+        return self.buscar_historial(
+            id_producto=id_producto,
+            id_area=id_area,
+            id_tipo_movimiento=id_tipo_movimiento,
+            rut_usuario=rut_usuario,
+            id_fecha_desde=id_fecha_desde,
+            id_fecha_hasta=id_fecha_hasta,
+        )
 
     def stock_agregado(self, tamano_pagina: int = 1000) -> List[Dict]:
         """Obtiene todos los movimientos necesarios para calcular stock.
@@ -133,24 +129,24 @@ class MovimientosRepository(BaseRepository):
         return filas
     
     def get_all_con_relaciones(self) -> List[Dict]:
-        """Get all movements with related data."""
-        try:
-            response = self.client.table(self.table_name).select(
-                "*, dim_producto(*), dim_area(*), dim_tipo_movimiento(*), dim_usuario(*), dim_proveedor(*), dim_evento(*), dim_fecha(*)"
-            ).execute()
-            return response.data or []
-        except Exception:
-            return []
+        """Get all movements with related data (sin datos sensibles del usuario)."""
+        response = self.client.table(self.table_name).select(
+            "*, dim_producto(*), dim_area(*), dim_tipo_movimiento(*), "
+            "dim_usuario(rut_usuario, nombre_usuario), dim_proveedor(*), "
+            "dim_evento(*), dim_fecha(*)"
+        ).execute()
+        return response.data or []
     
     def get_stock_movimientos(self, id_producto: int, id_area: int = None) -> List[Dict]:
-        """Get movements for stock calculation."""
-        try:
-            query = self.client.table(self.table_name).select(
-                "cantidad, id_tipo_movimiento, dim_tipo_movimiento(factor_stock)"
-            ).eq("id_producto", id_producto)
-            if id_area:
-                query = query.eq("id_area", id_area)
-            response = query.execute()
-            return response.data or []
-        except Exception:
-            return []
+        """Get movements for stock calculation.
+
+        Los errores se propagan: devolver una lista vacía haría creer que el
+        stock es 0.
+        """
+        query = self.client.table(self.table_name).select(
+            "cantidad, id_tipo_movimiento, dim_tipo_movimiento(factor_stock)"
+        ).eq("id_producto", id_producto)
+        if id_area:
+            query = query.eq("id_area", id_area)
+        response = query.execute()
+        return response.data or []

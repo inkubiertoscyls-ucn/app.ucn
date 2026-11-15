@@ -30,6 +30,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.worksheet.datavalidation import DataValidation
 
+from core.tiempo import marca_tiempo as marca_tiempo_chile
 from core.areas import resolver_area_id
 from core.exceptions import ValidationError
 from core.importacion import componer_observacion, crear_marcador, marcador_de
@@ -1348,7 +1349,7 @@ class ImportacionInventarioService:
                 "duplicados de la vista previa."
             )
 
-        marca_tiempo = datetime.now().isoformat()
+        marca_tiempo = marca_tiempo_chile()
         payload = []
         for registro in validos:
             fila = dict(registro["payload"])

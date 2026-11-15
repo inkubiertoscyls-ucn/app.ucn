@@ -13,7 +13,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from services.usuarios import UsuariosService
 from repositories.usuarios import UsuariosRepository
 from core.utils import normalizar_rut, validar_rut
-from core.auth_password import hash_password
 
 
 def init_first_admin():

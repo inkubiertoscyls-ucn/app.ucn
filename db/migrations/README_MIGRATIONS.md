@@ -15,6 +15,11 @@
 - `hecho_inventario` SIN columna `costo_total`
 - `hecho_venta_fudo` tabla independiente
 
+## Seguridad (005_enable_rls.sql)
+- La app se conecta con `SUPABASE_SERVICE_ROLE_KEY` (clave secreta) desde el servidor.
+- `005_enable_rls.sql` activa RLS en todas las tablas: la clave pública deja de
+  tener acceso a los datos. Configurar la clave secreta **antes** de ejecutarla.
+
 ## Notas
 - Si hay tablas/columnas faltantes, crear migración incremental
 - No eliminar tablas o datos existentes

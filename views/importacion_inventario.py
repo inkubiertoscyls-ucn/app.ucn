@@ -255,7 +255,7 @@ def _render_preview(
         key="imp_inv_importar",
         type="primary",
         disabled=not confirmado,
-        use_container_width=True,
+        width="stretch",
     ):
         try:
             with st.spinner("Registrando movimientos de inventario…"):
@@ -312,7 +312,7 @@ def render_importacion_inventario(user: Dict[str, Any]) -> None:
                 "spreadsheetml.sheet"
             ),
             key="imp_inv_plantilla_descarga",
-            use_container_width=True,
+            width="stretch",
         )
 
     st.markdown("---")
@@ -331,7 +331,7 @@ def render_importacion_inventario(user: Dict[str, Any]) -> None:
             if st.button(
                 "Quitar archivo",
                 key="imp_inv_quitar",
-                use_container_width=True,
+                width="stretch",
             ):
                 _limpiar_archivo()
                 st.rerun()
@@ -341,6 +341,7 @@ def render_importacion_inventario(user: Dict[str, Any]) -> None:
         "Archivo Excel de movimientos",
         type=["xlsx"],
         key=f"imp_inv_upload_{upload_id}",
+        max_upload_size=10,
         help=(
             "Formato .xlsx. Debe incluir las columnas fecha, producto, area, "
             "cantidad y, opcionalmente, tipo_movimiento, costo_unitario, "

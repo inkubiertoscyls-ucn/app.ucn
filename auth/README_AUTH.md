@@ -1,44 +1,36 @@
 # Autenticación - INKubiertos
 
-## Estado actual
-No se implementa un mecanismo de autenticación inseguro. Este módulo documenta cómo integrar con el sistema de autenticación existente.
+## Cómo funciona
+- Los usuarios viven en `dim_usuario` (PK `rut_usuario`, RUT normalizado sin puntos ni guion).
+- El ingreso es con **RUT + contraseña**. Las contraseñas se guardan solo como hash
+  **Argon2id** (`core/auth_password.py`); nunca en texto plano.
+- Roles: `Administrador` y `Operario`. El campo `activo` controla el acceso.
 
-## Requisitos
-- Los usuarios se gestionan en `dim_usuario` con PK `rut_usuario`
-- Roles: `Administrador`, `Operario`
-- Campo `activo` controla acceso
-- Normalización de RUT chileno obligatoria
-- NO almacenar contraseñas en texto plano
-- Si existe `password_hash`, usarlo con sistema de auth existente
+## Flujo
+1. **Registro público** (`views/auth.py`): solo crea cuentas `Operario`, siempre inactivas.
+2. Un **administrador** activa la cuenta desde la pantalla *Usuarios*.
+3. **Login** (`components/auth.py` → `UsuariosService.autenticar`):
+   - Se valida el formato del RUT antes de consultar la base de datos.
+   - Se verifica la contraseña **antes** de informar si la cuenta está inactiva, para no revelar
+     qué RUT están registrados.
+   - Tras 5 intentos fallidos para un RUT, se bloquea durante 5 minutos (`core/intentos_login.py`).
+4. **Sesión** (`ui/state.py`):
+   - Se cierra tras `SESSION_TIMEOUT_MINUTES` minutos sin actividad (60 por defecto).
+   - Cada minuto se relee la cuenta: si fue desactivada se cierra la sesión, y si cambió el rol o
+     el área se actualiza.
 
-## Integración
-Si ya existe sistema de autenticación en la aplicación (Streamlit auth, Supabase Auth, etc.):
-
-1. Autenticar usuario con sistema existente
-2. Obtener RUT del usuario autenticado
-3. Normalizar RUT con `core.utils.normalizar_rut()`
-4. Verificar en `dim_usuario` que existe y está activo
-5. Verificar rol con `services.usuarios.UsuariosService.verificar_permisos()`
-6. Aplicar restricciones por rol
+## Primer administrador
+```bash
+python scripts/init_admin.py
+```
+Solo funciona si todavía no existe ningún administrador.
 
 ## Permisos
-- **Administrador**: Gestionar usuarios, productos, proveedores, eventos, consultar información financiera, autorizar cuentas
-- **Operario**: Registrar movimientos de inventario en su área, consultar información necesaria
+- **Administrador**: usuarios, productos, proveedores, eventos, ventas FUDO y rentabilidad.
+- **Operario**: registra y consulta movimientos solo de su área.
 
-## Uso en código
-```python
-from services.usuarios import UsuariosService
-from core.utils import normalizar_rut
+Los permisos se validan en la capa de datos (`data/permisos.py`) y en los servicios, no solo en las
+pantallas. Activar, desactivar o modificar una cuenta exige indicar el administrador que autoriza.
 
-usuarios_service = UsuariosService()
-rut = normalizar_rut(rut_usuario)
-if usuarios_service.puede_registrar_movimientos(rut):
-    # Permitir operación
-    pass
-```
-
-## Notas
-- Usuarios inactivos NO pueden registrar movimientos
-- Siempre validar con `services.inventario.InventarioService.verificar_permisos_movimiento()`
-- RUTs normalizados (sin puntos/guiones, K mayúscula)
-- Sin `id_usuario` numérico
+## Recuperación de acceso
+No hay restablecimiento por correo. Un administrador debe gestionar la cuenta.

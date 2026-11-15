@@ -7,13 +7,14 @@ utilidad cero. No se calcula rentabilidad por área ni se inventan eventos.
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import timedelta
 from html import escape
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import streamlit as st
 
+from core.tiempo import hoy_chile
 from core.exceptions import AuthorizationError
 from data.catalogos import listar_eventos
 from data.errors import ErrorDatos
@@ -156,7 +157,7 @@ def _graficos(resumen: Dict[str, Any]) -> None:
             st.bar_chart(
                 datos.set_index("Categoría"),
                 height=300,
-                use_container_width=True,
+                width="stretch",
             )
         else:
             st.caption("Sin ventas con costo para agrupar por categoría.")
@@ -181,7 +182,7 @@ def _graficos(resumen: Dict[str, Any]) -> None:
             st.bar_chart(
                 datos.set_index("Producto"),
                 height=300,
-                use_container_width=True,
+                width="stretch",
             )
             st.caption("Se muestran los 10 productos con mayores ventas estimadas.")
         else:
@@ -210,7 +211,7 @@ def render_rentabilidad() -> None:
         mostrar_error(exc, prefijo="No se pudo cargar el catálogo de eventos.")
         eventos = []
 
-    hoy = date.today()
+    hoy = hoy_chile()
     col_desde, col_hasta, col_todo = st.columns([1, 1, 1])
     with col_desde:
         desde = st.date_input(

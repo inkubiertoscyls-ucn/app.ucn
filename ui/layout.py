@@ -24,18 +24,34 @@ TONOS_ESTADO = {
 
 def page_header(title: str, subtitle: Optional[str] = None) -> None:
     """Encabezado estándar de una pantalla."""
+    # El HTML se arma sin líneas en blanco ni sangría: en markdown, una línea
+    # vacía seguida de texto sangrado se muestra como bloque de código.
     subtitle_html = (
         f'<p class="ink-page-subtitle">{escape(str(subtitle))}</p>'
         if subtitle
         else ""
     )
     st.markdown(
-        f"""
-        <div class="ink-page-head">
-            <h1 class="ink-page-title">{escape(str(title))}</h1>
-            {subtitle_html}
-        </div>
-        """,
+        '<div class="ink-page-head">'
+        f'<h1 class="ink-page-title">{escape(str(title))}</h1>'
+        f"{subtitle_html}"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def hero_header(title: str, subtitle: Optional[str] = None) -> None:
+    """Encabezado de portada con la fotografía del local."""
+    subtitle_html = (
+        f'<p class="ink-hero-subtitle">{escape(str(subtitle))}</p>'
+        if subtitle
+        else ""
+    )
+    st.markdown(
+        '<div class="ink-hero"><div>'
+        f'<h1 class="ink-hero-title">{escape(str(title))}</h1>'
+        f"{subtitle_html}"
+        "</div></div>",
         unsafe_allow_html=True,
     )
 
@@ -52,16 +68,12 @@ def top_bar(user: Optional[Dict[str, Any]] = None) -> None:
     rol_html = f'<span class="ink-topbar-role">{rol}</span>' if rol else ""
 
     st.markdown(
-        f"""
-        <div class="ink-topbar">
-            <div class="ink-topbar-brand">INKubiertos</div>
-            <div class="ink-topbar-right">
-                <span class="ink-topbar-user">{nombre}</span>
-                {rol_html}
-                {area_html}
-            </div>
-        </div>
-        """,
+        '<div class="ink-topbar">'
+        '<div class="ink-topbar-brand">INKubiertos</div>'
+        '<div class="ink-topbar-right">'
+        f'<span class="ink-topbar-user">{nombre}</span>'
+        f"{rol_html}{area_html}"
+        "</div></div>",
         unsafe_allow_html=True,
     )
 
@@ -99,12 +111,10 @@ def metric_grid(
             "</div>"
         )
 
+    # La grilla base tiene 5 columnas; para 1 a 4 tarjetas se ajusta el
+    # número de columnas para que ocupen todo el ancho disponible.
     ancho = columns if columns else total
-    clase = (
-        f" ink-metrics--{ancho}"
-        if ancho and 2 <= ancho <= 5 and ancho != 5
-        else ""
-    )
+    clase = f" ink-metrics--{ancho}" if 1 <= ancho <= 4 else ""
     st.markdown(
         f'<div class="ink-metrics{clase}">{"".join(tarjetas)}</div>',
         unsafe_allow_html=True,

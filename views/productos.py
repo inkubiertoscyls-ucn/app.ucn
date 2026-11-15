@@ -239,7 +239,7 @@ def _formulario_producto(
         enviado = st.form_submit_button(
             "Guardar cambios" if editar else "Registrar producto",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
 
     if not enviado:
@@ -323,7 +323,7 @@ def _panel_estado(productos: List[Dict[str, Any]], usuario: Dict[str, Any]) -> N
         key=f"prod_boton_{accion}_{identificador}",
         type="primary",
         disabled=not confirmar,
-        use_container_width=True,
+        width="stretch",
     ):
         try:
             with cargando(f"Procesando «{nombre}»…"):

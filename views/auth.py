@@ -9,12 +9,14 @@ from data.catalogos import listar_areas
 from data.errors import ErrorDatos
 from services.usuarios import UsuariosService
 from ui.feedback import cargando, mostrar_error
+from ui.imagenes import LOGO_BLANCO
 from ui.state import flash, render_flash
 
-BRAND_PANEL = """
+BRAND_PANEL = f"""
 <div class="ink-login-brand">
     <div>
-        <div class="ink-login-wordmark">INKubiertos</div>
+        <img class="ink-login-logo" src="{LOGO_BLANCO}"
+             alt="INKubiertos · Tattoo &amp; food">
         <div class="ink-login-tagline">Gestión de inventario y rentabilidad</div>
     </div>
     <div>
@@ -66,7 +68,7 @@ def _render_login() -> None:
             "Crear cuenta de operario",
             key="go_register",
             type="tertiary",
-            use_container_width=True,
+            width="stretch",
         ):
             st.session_state.auth_view = "register"
             st.rerun()
@@ -74,7 +76,7 @@ def _render_login() -> None:
             "Olvidé mi contraseña",
             key="go_forgot",
             type="tertiary",
-            use_container_width=True,
+            width="stretch",
         ):
             st.session_state.auth_view = "forgot"
             st.rerun()
@@ -157,7 +159,7 @@ def _render_register() -> None:
             submitted = st.form_submit_button(
                 "Crear cuenta",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
                 disabled=not areas,
             )
 

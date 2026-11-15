@@ -8,12 +8,14 @@ su área; el administrador puede elegir cualquier área.
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import timedelta
 from html import escape
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import streamlit as st
 
+from core.tiempo import hoy_chile
+from core.utils import formatear_rut
 from core.exceptions import AuthorizationError
 from data.catalogos import area_id, listar_areas, listar_tipos_movimiento
 from data.errors import ErrorDatos
@@ -210,7 +212,7 @@ def _render_registro(
     with col_fecha:
         st.text_input(
             "Fecha del movimiento",
-            value=fmt_fecha_larga(date.today()),
+            value=fmt_fecha_larga(hoy_chile()),
             disabled=True,
             key="mov_fecha",
         )
@@ -230,7 +232,7 @@ def _render_registro(
 
     _preview_stock(stock, int(cantidad), factor, unidad, nombre_area)
 
-    rut = str(user.get("rut_usuario") or "").strip()
+    rut = formatear_rut(user.get("rut_usuario")) if user.get("rut_usuario") else ""
     nombre_usuario = str(user.get("nombre_usuario") or "Usuario").strip()
     st.caption(f"Responsable: {nombre_usuario} · {rut or 'sin RUT'}")
 
@@ -238,7 +240,7 @@ def _render_registro(
         f"Registrar {nombre_tipo.lower()}",
         key="mov_registrar",
         type="primary",
-        use_container_width=True,
+        width="stretch",
     ):
         try:
             with st.spinner("Registrando movimiento…"):
@@ -280,7 +282,7 @@ def _tabla_historial(filas: List[Dict[str, Any]]) -> str:
         unidad_texto = f" {unidad}" if unidad else ""
         observacion = str(fila.get("observacion") or "").strip() or "—"
         usuario = str(fila.get("usuario") or "Sin usuario")
-        rut = str(fila.get("rut_usuario") or "")
+        rut = formatear_rut(fila.get("rut_usuario")) if fila.get("rut_usuario") else ""
         rut_html = (
             f'<div class="ink-muted">{escape(rut)}</div>' if rut else ""
         )
@@ -331,7 +333,7 @@ def _render_historial(
     )
 
     col_desde, col_hasta, col_todo = st.columns([1, 1, 1])
-    hoy = date.today()
+    hoy = hoy_chile()
     with col_desde:
         desde = st.date_input(
             "Desde",

@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import math
 import time
-from datetime import date
 from typing import Any, Dict, List, Optional
 
 import streamlit as st
 
+from core.tiempo import hoy_chile
 from core.exceptions import AuthorizationError
 from core.importacion import quitar_marcador
 from data.cache import cache_datos, limpiar_cache
@@ -349,7 +349,7 @@ def registrar_movimiento(
         "costo_unitario": costo,
         "stock_anterior": stock,
         "stock_nuevo": stock + (factor * cantidad_entera),
-        "fecha": date.today(),
+        "fecha": hoy_chile(),
     }
 
 

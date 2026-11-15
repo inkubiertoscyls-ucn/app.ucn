@@ -6,6 +6,7 @@ mínimo, partiendo de una situación bajo el mínimo.
 """
 from __future__ import annotations
 
+from core.tiempo import hoy_chile
 from datetime import date
 from typing import Any, Dict, List, Optional
 
@@ -119,7 +120,7 @@ def resumen_alertas(
     hoy: Optional[date] = None,
 ) -> Dict[str, Any]:
     """Agrupa sin stock, críticos, bajos y recuperados del día."""
-    dia = hoy or date.today()
+    dia = hoy or hoy_chile()
     filas = inventario_visible(usuario=usuario)
     sin_stock = [fila for fila in filas if fila.get("estado") == "Sin stock"]
     criticos = [fila for fila in filas if fila.get("estado") == "Crítico"]

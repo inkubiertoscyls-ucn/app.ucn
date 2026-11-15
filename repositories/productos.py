@@ -3,7 +3,6 @@ Productos repository.
 """
 from typing import List, Dict, Optional
 from .base import BaseRepository
-from core.exceptions import DuplicateError, ValidationError
 
 
 class ProductosRepository(BaseRepository):
@@ -27,10 +26,7 @@ class ProductosRepository(BaseRepository):
 
     def get_by_nombre(self, nombre: str) -> Optional[Dict]:
         """Get product by name."""
-        try:
-            return self.get_by_nombre_estricto(nombre)
-        except Exception:
-            return None
+        return self.get_by_nombre_estricto(nombre)
 
     def get_by_nombre_estricto(self, nombre: str) -> Optional[Dict]:
         """Busca por nombre exacto sin ocultar errores de conexión."""
@@ -56,10 +52,7 @@ class ProductosRepository(BaseRepository):
 
     def buscar(self, termino: str) -> List[Dict]:
         """Search products by name or category."""
-        try:
-            return self.buscar_estricto(termino)
-        except Exception:
-            return []
+        return self.buscar_estricto(termino)
     
     def existe_nombre(self, nombre: str, exclude_id: int = None) -> bool:
         """Check if product name exists."""

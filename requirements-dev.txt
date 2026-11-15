@@ -1,0 +1,4 @@
+# Dependencias solo para desarrollo y pruebas
+-r requirements.txt
+pytest>=8,<10
+pytest-mock>=3.12,<4

@@ -1,8 +1,9 @@
 [theme]
+base = "light"
 primaryColor = "#800020"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F4F4F4"
-textColor = "#000000"
+backgroundColor = "#F9F9FB"
+secondaryBackgroundColor = "#F4F4F7"
+textColor = "#111113"
 font = "sans serif"
 
 [server]
@@ -10,6 +11,10 @@ headless = true
 port = 8501
 enableCORS = true
 enableXsrfProtection = true
+# Coincide con el límite que se informa en la pantalla de FUDO.
+maxUploadSize = 25
+# Publica la carpeta static/ (logo y fotografía) en app/static/.
+enableStaticServing = true
 
 [browser]
 gatherUsageStats = false

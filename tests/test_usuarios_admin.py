@@ -5,7 +5,6 @@ Se usan repositorios y servicios dobles. Ninguna prueba escribe en Supabase.
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 from streamlit.testing.v1 import AppTest

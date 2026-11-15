@@ -8,13 +8,14 @@ from __future__ import annotations
 
 import hashlib
 import unicodedata
-from datetime import date, timedelta
+from datetime import timedelta
 from html import escape
 from typing import Any, Dict, List
 
 import pandas as pd
 import streamlit as st
 
+from core.tiempo import hoy_chile
 from core.exceptions import AuthorizationError
 from data.catalogos import listar_eventos
 from data.errors import ErrorDatos
@@ -319,7 +320,7 @@ def _render_importar(user: Dict[str, Any]) -> None:
                 unsafe_allow_html=True,
             )
         with col_quitar:
-            if st.button("Quitar archivo", key="fudo_quitar", use_container_width=True):
+            if st.button("Quitar archivo", key="fudo_quitar", width="stretch"):
                 _limpiar_archivo()
                 st.rerun()
 
@@ -328,6 +329,7 @@ def _render_importar(user: Dict[str, Any]) -> None:
         "Archivo exportado desde FUDO",
         type=["csv", "xlsx", "xls"],
         key=f"fudo_upload_{upload_id}",
+        max_upload_size=25,
         help="Formatos aceptados: CSV, XLSX y XLS. Tamaño máximo: 25 MB.",
     )
 
@@ -406,7 +408,7 @@ def _render_importar(user: Dict[str, Any]) -> None:
         if muestra:
             st.dataframe(
                 pd.DataFrame(muestra),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
             st.caption("Se muestran las primeras 10 filas del archivo.")
@@ -456,7 +458,7 @@ def _render_importar(user: Dict[str, Any]) -> None:
         key="fudo_validar",
         type="primary",
         disabled=bool(faltantes),
-        use_container_width=True,
+        width="stretch",
     ):
         try:
             with st.spinner("Validando fechas, montos, cantidades y duplicados…"):
@@ -599,7 +601,7 @@ def _render_analisis(
         key="fudo_importar",
         type="primary",
         disabled=not confirmado,
-        use_container_width=True,
+        width="stretch",
     ):
         try:
             with st.spinner("Importando ventas…"):
@@ -738,7 +740,7 @@ def _render_pendientes(user: Dict[str, Any]) -> None:
         key="fudo_vincular",
         type="primary",
         disabled=producto is None,
-        use_container_width=True,
+        width="stretch",
     ):
         try:
             with st.spinner("Vinculando ventas…"):
@@ -767,7 +769,7 @@ def _render_pendientes(user: Dict[str, Any]) -> None:
 
 
 def _render_ventas(user: Dict[str, Any]) -> None:
-    hoy = date.today()
+    hoy = hoy_chile()
     col_desde, col_hasta, col_todo = st.columns([1, 1, 1])
     with col_desde:
         desde = st.date_input(

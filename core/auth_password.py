@@ -2,7 +2,6 @@
 Password hashing and verification using Argon2id.
 Never store plain passwords. Never use simple SHA-256 for passwords.
 """
-from typing import Optional
 from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")

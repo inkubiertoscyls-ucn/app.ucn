@@ -8,6 +8,7 @@ from typing import Any, Dict, Iterable, Optional
 from core.areas import area_visible as _area_visible
 from core.areas import resolver_area as _resolver_area
 from core.stock import clasificar_stock
+from core.tiempo import a_hora_chile, hoy_chile
 
 MESES_ES = (
     "enero",
@@ -59,18 +60,18 @@ def fmt_fecha_hora(value: Any) -> str:
         if text:
             try:
                 parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-                return parsed.strftime("%d/%m/%Y %H:%M")
+                return a_hora_chile(parsed).strftime("%d/%m/%Y %H:%M")
             except ValueError:
                 pass
     if isinstance(value, datetime):
-        return value.strftime("%d/%m/%Y %H:%M")
+        return a_hora_chile(value).strftime("%d/%m/%Y %H:%M")
     parsed = _to_date(value)
     return parsed.strftime("%d/%m/%Y") if parsed else "—"
 
 
 def fmt_fecha_larga(value: Any = None) -> str:
     """Devuelve una fecha larga en español, por ejemplo '3 de noviembre de 2026'."""
-    parsed = _to_date(value) if value is not None else date.today()
+    parsed = _to_date(value) if value is not None else hoy_chile()
     if not parsed:
         return "—"
     return f"{parsed.day} de {MESES_ES[parsed.month - 1]} de {parsed.year}"
@@ -108,14 +109,19 @@ def fmt_clp(value: Any, compacto: bool = False) -> str:
     except (TypeError, ValueError):
         return "—"
 
-    if compacto:
-        absoluto = abs(monto)
-        if absoluto >= 1_000_000:
-            return f"${monto / 1_000_000:,.1f}M".replace(",", ".").replace(".", ",", 1)
-        if absoluto >= 1_000:
-            return f"${monto / 1_000:,.0f}K".replace(",", ".")
+    if not math.isfinite(monto):
+        return "—"
 
-    return f"${monto:,.0f}".replace(",", ".")
+    signo = "-" if monto < 0 else ""
+    absoluto = abs(monto)
+
+    if compacto:
+        if absoluto >= 1_000_000:
+            return f"{signo}${fmt_numero(absoluto / 1_000_000, 1)}M"
+        if absoluto >= 1_000:
+            return f"{signo}${fmt_numero(absoluto / 1_000)}K"
+
+    return f"{signo}${fmt_numero(absoluto)}"
 
 
 def fmt_pct(value: Any, decimales: int = 0) -> str:

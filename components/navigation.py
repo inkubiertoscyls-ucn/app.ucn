@@ -7,6 +7,7 @@ from typing import Any, Dict
 import streamlit as st
 
 from ui.format import area_visible
+from ui.imagenes import LOGO_BLANCO
 from ui.state import logout
 
 # Las pantallas heredadas de entrada/salida/historial se agrupan visualmente
@@ -22,7 +23,7 @@ def _nav_button(label: str, page: str, active: bool) -> None:
     if st.sidebar.button(
         label,
         key=f"nav_{page}",
-        use_container_width=True,
+        width="stretch",
         type="primary" if active else "secondary",
     ):
         st.session_state.page = page
@@ -54,9 +55,10 @@ def sidebar_navigation() -> None:
 
     with st.sidebar:
         st.markdown(
-            """
+            f"""
             <div class="ink-sidebar-brand">
-                <div class="ink-sidebar-wordmark">INKubiertos</div>
+                <img class="ink-sidebar-logo" src="{LOGO_BLANCO}"
+                     alt="INKubiertos · Tattoo &amp; food">
                 <div class="ink-sidebar-subtitle">Gestión de inventario</div>
             </div>
             """,
@@ -85,6 +87,6 @@ def sidebar_navigation() -> None:
 
         st.markdown('<div class="ink-sidebar-spacer"></div>', unsafe_allow_html=True)
 
-        if st.button("Cerrar sesión", key="nav_logout", use_container_width=True):
+        if st.button("Cerrar sesión", key="nav_logout", width="stretch"):
             logout()
             st.rerun()

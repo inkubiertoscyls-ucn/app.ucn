@@ -5,7 +5,6 @@ import logging
 from typing import Any
 
 from db.supabase_client import get_supabase_client
-from core.exceptions import SupabaseConnectionError
 
 logger = logging.getLogger(__name__)
 

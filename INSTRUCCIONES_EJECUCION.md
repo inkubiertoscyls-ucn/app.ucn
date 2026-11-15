@@ -1,22 +1,17 @@
-# Instrucciones para ejecutar el backend desde VS Code
+# Instrucciones para ejecutar INKubiertos desde VS Code
 
-## Prerequisitos
+## Prerrequisitos
 - Python 3.10 o superior
-- VS Code con extensión Python
-- Acceso a Supabase (URL y keys)
-- Git (opcional)
+- VS Code con la extensión de Python
+- Acceso a Supabase (URL y claves)
 
 ## Configuración inicial
 
-### 1. Crear entorno virtual
+### 1. Crear el entorno virtual
 ```bash
 # Windows (PowerShell)
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-
-# Windows (CMD)
-python -m venv .venv
-.\.venv\Scripts\activate.bat
 
 # Linux/Mac
 python -m venv .venv
@@ -25,159 +20,110 @@ source .venv/bin/activate
 
 ### 2. Instalar dependencias
 ```bash
+pip install -r requirements-dev.txt   # app + pruebas
+# o solo la app:
 pip install -r requirements.txt
 ```
 
 ### 3. Configurar variables de entorno
-Copiar `.env.example` a `.env`:
-```bash
-# Windows
-copy .env.example .env
-
-# Linux/Mac
-cp .env.example .env
-```
-
-Editar `.env` con credenciales reales:
+Copiar `.env.example` a `.env` (`copy .env.example .env` en Windows) y completar:
 ```env
 SUPABASE_URL=https://tu-proyecto.supabase.co
-SUPABASE_KEY=tu-anon-key
-SUPABASE_SERVICE_ROLE_KEY=tu-service-role-key
+SUPABASE_KEY=sb_publishable_...          # clave pública
+SUPABASE_SERVICE_ROLE_KEY=sb_secret_...  # clave secreta (solo servidor)
+SESSION_TIMEOUT_MINUTES=60
 ```
 
-**SI USAS STREAMLIT:** También puedes usar `.streamlit/secrets.toml`:
+En Streamlit Cloud se usa `.streamlit/secrets.toml`:
 ```toml
 [supabase]
 url = "https://tu-proyecto.supabase.co"
-key = "tu-anon-key"
-service_role_key = "tu-service-role-key"
+key = "sb_publishable_..."
+service_role_key = "sb_secret_..."
 ```
 
 ### 4. Verificar conexión y esquema
-```python
-# En terminal de Python o script
-from db.supabase_client import get_supabase_client
-from db.schema_check import SchemaChecker, generate_migration_report
-
-client = get_supabase_client()
-checker = SchemaChecker()
-result = checker.check_all()
-print(generate_migration_report(result))
+```bash
+python scripts/verificar_conexion.py
 ```
 
 ### 5. Aplicar migraciones (MANUAL)
-**NO se ejecutan automáticamente.**
-1. Abrir Supabase SQL Editor
-2. Copiar contenido de `db/migrations/001_initial_schema.sql`
-3. Revisar y ejecutar manualmente
-4. Verificar esquema con el checker
+Las migraciones **no** se ejecutan automáticamente.
+1. Abrir Supabase > SQL Editor.
+2. Revisar y ejecutar en orden los archivos de `db/migrations/` que falten.
+3. **Seguridad:** con `SUPABASE_SERVICE_ROLE_KEY` ya configurada, ejecutar
+   `005_enable_rls.sql`. Activa RLS en todas las tablas para que la clave pública no pueda
+   leer ni modificar datos.
+4. Verificar con `python scripts/verificar_conexion.py`.
+
+### 6. Crear el primer administrador
+```bash
+python scripts/init_admin.py
+```
+
+## Ejecutar la aplicación
+```bash
+streamlit run app.py
+```
+La configuración visual y de servidor está en `.streamlit/config.toml` (incluye
+`enableStaticServing`, necesario para mostrar el logo y la fotografía desde `static/`).
+
+## Imágenes
+Los originales están en `imagenes/`. Tras reemplazar el logo o la fotografía:
+```bash
+python scripts/generar_imagenes.py
+```
 
 ## Ejecutar pruebas
 ```bash
-# Todas las pruebas
-pytest tests/ -v
-
-# Con más detalle
-pytest tests/ -v --tb=short
-
-# Solo pruebas de RUT
-pytest tests/test_rut.py -v
-
-# Solo inventario
-pytest tests/test_inventario_stock.py -v
+pytest -v                               # todas
+pytest tests/test_rut.py -v             # solo RUT
+pytest tests/test_inventario_stock.py   # solo inventario
 ```
 
-**Nota:** Las pruebas que requieren acceso real a Supabase o archivos FUDO se marcarán como `SKIPPED`.
-
-## Uso desde VS Code
-
-### Debugging
-Crear `launch.json` en `.vscode/`:
+## Depuración en VS Code
+Crear `.vscode/launch.json`:
 ```json
 {
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Python: Current File",
-      "type": "python",
+      "name": "Streamlit: app.py",
+      "type": "debugpy",
       "request": "launch",
-      "program": "${file}",
-      "console": "integratedTerminal",
+      "module": "streamlit",
+      "args": ["run", "app.py"],
       "envFile": "${workspaceFolder}/.env"
     }
   ]
 }
 ```
 
-### Integración con Streamlit
-```python
-import streamlit as st
-from config.settings import get_settings
-from services.inventario import InventarioService
+## Solución de problemas
 
-# Cargar con secrets de Streamlit
-settings = get_settings(use_streamlit=True)
-inventario = InventarioService()
-
-# Usar servicios
-```
-
-## Estructura de uso
-```python
-# Productos
-from services.productos import ProductosService
-prod_service = ProductosService()
-productos = prod_service.listar_productos()
-
-# Inventario
-from services.inventario import InventarioService
-inv_service = InventarioService()
-stock = inv_service.calcular_stock_actual(id_producto=1, id_area=1)
-
-# Movimientos
-data_entrada = {
-    "id_producto": 1,
-    "id_area": 1,
-    "id_tipo_movimiento": 1,  # Entrada
-    "rut_usuario": "12345678-9",
-    "cantidad": 10,
-    "costo_unitario": 1000,
-    "rut_proveedor": "98765432-1"
-}
-inv_service.registrar_entrada(data_entrada)
-
-# FUDO Import
-from services.fudo_import import FudoImportService
-fudo = FudoImportService()
-info = fudo.inspeccionar_archivo("ventas_fudo.xlsx")
-# Configurar mapeo y previsualizar
-```
-
-## Troubleshooting
-
-### Error de conexión Supabase
-- Verificar URL y keys en `.env`
-- Comprobar que las tablas existen
-- Revisar `db/schema_check.py`
+### Error de conexión con Supabase
+- Revisar URL y claves en `.env`.
+- Ejecutar `python scripts/verificar_conexion.py`.
+- Si se activó RLS y la app no ve datos, falta `SUPABASE_SERVICE_ROLE_KEY`.
 
 ### RUT inválido
-- Usar `core.utils.normalizar_rut()` antes de guardar
-- Usar `core.utils.validar_rut()` para validar
-- Formato acepta puntos, guiones o sin ellos, K/k mayúscula
+- Se aceptan formatos con o sin puntos y guion, y K mayúscula o minúscula.
+- `core.utils.normalizar_rut()` y `core.utils.validar_rut()` validan el dígito verificador.
 
 ### Stock negativo
-- Por defecto se rechaza
-- Usar `permitir_negativo=True` solo si hay regla de negocio autorizada y documentada
+- Se rechaza por defecto, también cuando dos personas registran salidas al mismo tiempo.
+- `permitir_negativo=True` solo con una regla de negocio autorizada y documentada.
 
-### Usuario inactivo
-- Verificar estado en `dim_usuario.activo`
-- Solo administradores pueden autorizar cuentas
+### "Demasiados intentos fallidos"
+- Tras 5 contraseñas incorrectas para un RUT, el ingreso se bloquea 5 minutos.
 
-## Notas importantes
-- **SIN FRONTEND**: No desarrollar UI
-- **Stock desde historial**: No guardar stock resultante
-- **Sin costo_total**: No agregar a hecho_inventario
-- **RUTs como PK**: Sin id_usuario/id_proveedor numéricos
-- **FUDO independiente**: No mezclar con hecho_inventario
-- **Sin credenciales en código**: Siempre usar .env o secrets
-- **Migraciones manuales**: No ejecutar automáticamente en BD remota
+### Archivos .xls de FUDO
+- Requieren el paquete `xlrd` (incluido en `requirements.txt`).
+
+## Reglas del proyecto
+- **Stock desde historial**: no se guarda el stock resultante.
+- **Sin `costo_total`** en `hecho_inventario`.
+- **RUT como PK**: sin `id_usuario` ni `id_proveedor` numéricos.
+- **FUDO independiente**: no se mezcla con `hecho_inventario`.
+- **Sin credenciales en el código**: siempre `.env` o secrets.
+- **Migraciones manuales**: nunca automáticas sobre la base remota.

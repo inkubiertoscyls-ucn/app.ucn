@@ -11,8 +11,9 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).parent))
 
 from components.navigation import sidebar_navigation
-from ui.layout import page_header, top_bar
-from ui.state import init_state, require_role
+from ui.imagenes import icono_pagina
+from ui.layout import top_bar
+from ui.state import init_state, require_role, verificar_sesion
 from ui.theme import inject_theme
 from views.auth import render_auth
 from views.alertas import render_alertas
@@ -29,9 +30,9 @@ from views.usuarios import render_usuarios
 # Page config
 st.set_page_config(
     page_title="INKubiertos · Inventario",
-    page_icon=None,
+    page_icon=icono_pagina(),
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",  # cerrado en celular, abierto en escritorio
 )
 
 inject_theme()
@@ -45,7 +46,7 @@ def show_usuarios():
 
 # Main app
 def main():
-    if not st.session_state.logged_in:
+    if not st.session_state.logged_in or not verificar_sesion():
         render_auth()
         return
 

@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 import streamlit as st
 
 from core.exceptions import AuthorizationError
+from core.utils import formatear_rut
 from data.errors import ErrorDatos
 from data.permisos import ADMINISTRADOR
 from data.usuarios import activar_usuario, desactivar_usuario, listar_usuarios
@@ -139,7 +140,7 @@ def _tabla_usuarios(
         cuerpo.append(
             "<tr>"
             f'<td><span class="ink-product-name">{nombre}</span></td>'
-            f'<td class="is-num">{escape(rut or "—")}</td>'
+            f'<td class="is-num">{escape(formatear_rut(rut) if rut else "—")}</td>'
             f"<td>{rol}</td>"
             f"<td>{escape(_area_texto(fila.get('area_asignada')))}</td>"
             f"<td>{estado}</td>"
@@ -257,7 +258,7 @@ def _panel_estado(
         index=indice_inicial,
         format_func=lambda fila: (
             f"{fila.get('nombre_usuario') or 'Sin nombre'} · "
-            f"{fila.get('rut_usuario') or '—'} · "
+            f"{formatear_rut(fila.get('rut_usuario')) if fila.get('rut_usuario') else '—'} · "
             f"{'Activo' if fila.get('activo') else 'Inactivo'}"
         ),
         key="usr_estado_usuario",
@@ -299,7 +300,7 @@ def _panel_estado(
             key="usr_desactivar",
             type="primary",
             disabled=not confirmar,
-            use_container_width=True,
+            width="stretch",
         ):
             _ejecutar_cambio(
                 activar=False,
@@ -318,7 +319,7 @@ def _panel_estado(
         key="usr_activar",
         type="primary",
         disabled=not confirmar,
-        use_container_width=True,
+        width="stretch",
     ):
         _ejecutar_cambio(
             activar=True,

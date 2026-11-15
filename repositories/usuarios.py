@@ -13,15 +13,10 @@ class UsuariosRepository(BaseRepository):
     
     def get_by_rut(self, rut: str) -> Optional[Dict]:
         """Get user by RUT (PK)."""
-        try:
-            rut_norm = normalizar_rut(rut)
-            if not validar_rut(rut_norm):
-                raise InvalidRUTError("RUT inválido")
-            return self.get_by_id("rut_usuario", rut_norm)
-        except InvalidRUTError:
-            raise
-        except Exception:
-            return None
+        rut_norm = normalizar_rut(rut)
+        if not validar_rut(rut_norm):
+            raise InvalidRUTError("RUT inválido")
+        return self.get_by_id("rut_usuario", rut_norm)
     
     def get_activos(self) -> List[Dict]:
         """Get active users."""

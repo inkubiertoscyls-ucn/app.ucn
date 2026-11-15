@@ -21,32 +21,40 @@ class Settings:
     supabase_service_role_key: Optional[str] = None
     app_env: str = "development"
     log_level: str = "INFO"
-    auth_enabled: bool = False
     session_timeout_minutes: int = 60
-    
+
+    @property
+    def clave_servidor(self) -> str:
+        """Clave con la que el servidor de Streamlit se conecta a Supabase.
+
+        La app corre en el servidor (el navegador nunca ve la clave), así que
+        se prefiere la clave secreta: permite activar RLS en todas las tablas
+        y dejar sin acceso a quien solo tenga la clave pública.
+        """
+        return self.supabase_service_role_key or self.supabase_key
+
     @classmethod
     def from_env(cls) -> "Settings":
         """Load settings from environment variables."""
         supabase_url = os.getenv("SUPABASE_URL", "")
         supabase_key = os.getenv("SUPABASE_KEY", "")
         supabase_service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-        
+
         if not supabase_url or not supabase_key:
             raise ValueError(
                 "SUPABASE_URL and SUPABASE_KEY must be set. "
                 "Check .env or Streamlit secrets."
             )
-        
+
         return cls(
             supabase_url=supabase_url,
             supabase_key=supabase_key,
             supabase_service_role_key=supabase_service_role_key,
             app_env=os.getenv("APP_ENV", "development"),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
-            auth_enabled=os.getenv("AUTH_ENABLED", "false").lower() == "true",
             session_timeout_minutes=int(os.getenv("SESSION_TIMEOUT_MINUTES", "60")),
         )
-    
+
     @classmethod
     def from_streamlit_secrets(cls) -> "Settings":
         """Load settings from Streamlit secrets."""
@@ -56,17 +64,16 @@ class Settings:
             supabase_url = supabase_config.get("url", "") or st.secrets.get("SUPABASE_URL", "")
             supabase_key = supabase_config.get("key", "") or st.secrets.get("SUPABASE_KEY", "")
             supabase_service_role_key = supabase_config.get("service_role_key") or st.secrets.get("SUPABASE_SERVICE_ROLE_KEY")
-            
+
             if not supabase_url or not supabase_key:
                 raise ValueError("Supabase credentials not found in Streamlit secrets")
-            
+
             return cls(
                 supabase_url=supabase_url,
                 supabase_key=supabase_key,
                 supabase_service_role_key=supabase_service_role_key,
                 app_env=st.secrets.get("APP_ENV", "development"),
                 log_level=st.secrets.get("LOG_LEVEL", "INFO"),
-                auth_enabled=st.secrets.get("AUTH_ENABLED", False),
                 session_timeout_minutes=int(st.secrets.get("SESSION_TIMEOUT_MINUTES", 60)),
             )
         except Exception as e:

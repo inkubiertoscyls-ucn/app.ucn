@@ -1,7 +1,11 @@
 """Componentes de autenticación."""
+import time
+
 import streamlit as st
 
-from core.exceptions import AuthenticationError, InvalidRUTError
+from core.exceptions import AuthenticationError
+from core.intentos_login import registrar_exito, registrar_fallo, segundos_bloqueo
+from core.utils import validar_rut
 from services.usuarios import UsuariosService
 
 
@@ -24,7 +28,7 @@ def login_form():
 
         submitted = st.form_submit_button(
             "Ingresar",
-            use_container_width=True,
+            width="stretch",
             type="primary",
         )
 
@@ -34,31 +38,54 @@ def login_form():
                 st.error("Por favor ingresa RUT y contraseña.")
                 return False
 
+            # Un RUT mal escrito no es un intento de contraseña: se avisa sin
+            # contar el fallo y sin consultar la base de datos.
+            if not validar_rut(rut):
+                st.error("RUT inválido. Revisa el formato e inténtalo nuevamente.")
+                return False
+
+            espera = segundos_bloqueo(rut)
+            if espera:
+                minutos = max(1, round(espera / 60))
+                st.error(
+                    "Demasiados intentos fallidos. Espera "
+                    f"{minutos} minuto{'s' if minutos != 1 else ''} e inténtalo nuevamente."
+                )
+                return False
+
             try:
                 usuarios_service = UsuariosService()
                 user = usuarios_service.autenticar(rut, password)
-                st.session_state.logged_in = True
-                st.session_state.user = {
-                    "rut_usuario": user.get("rut_usuario"),
-                    "nombre_usuario": user.get("nombre_usuario"),
-                    "rol": user.get("rol"),
-                    "area_asignada": user.get("area_asignada"),
-                    "activo": user.get("activo"),
-                }
-                st.session_state.page = "inicio"
-                st.session_state.auth_view = "login"
-                st.rerun()
-            except InvalidRUTError:
-                st.error("RUT inválido. Revisa el formato e inténtalo nuevamente.")
             except AuthenticationError as error:
                 mensaje = str(error)
                 if mensaje == "Cuenta inactiva":
-                    mensaje = (
+                    # La contraseña era correcta: no cuenta como intento fallido.
+                    st.error(
                         "Tu cuenta está inactiva. Contacta al administrador "
                         "para que active tu acceso."
                     )
-                st.error(mensaje)
+                else:
+                    registrar_fallo(rut)
+                    st.error(mensaje)
+                return False
             except Exception:
                 st.error("No se pudo conectar con el servicio. Intenta nuevamente.")
+                return False
+
+            registrar_exito(rut)
+            ahora = time.time()
+            st.session_state.logged_in = True
+            st.session_state.user = {
+                "rut_usuario": user.get("rut_usuario"),
+                "nombre_usuario": user.get("nombre_usuario"),
+                "rol": user.get("rol"),
+                "area_asignada": user.get("area_asignada"),
+                "activo": user.get("activo"),
+            }
+            st.session_state.ultima_actividad = ahora
+            st.session_state.ultima_revalidacion = ahora
+            st.session_state.page = "inicio"
+            st.session_state.auth_view = "login"
+            st.rerun()
 
     return False

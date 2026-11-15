@@ -1,11 +1,8 @@
 """
 Tests for permissions between Administrador and Operario.
 """
-import pytest
 from unittest.mock import MagicMock, patch
 from services.usuarios import UsuariosService
-from services.inventario import InventarioService
-from core.exceptions import AuthorizationError
 
 
 class TestPermisos:

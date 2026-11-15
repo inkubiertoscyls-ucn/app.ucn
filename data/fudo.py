@@ -12,7 +12,6 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Dict, Iterator, Optional, Tuple
 
-from core.exceptions import ValidationError
 from data.cache import limpiar_cache
 from data.errors import VALIDACION, ErrorDatos, como_error
 from data.permisos import exigir_admin

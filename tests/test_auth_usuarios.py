@@ -5,7 +5,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from services.usuarios import UsuariosService
 from core.auth_password import hash_password, verify_password
-from core.exceptions import AuthenticationError, ValidationError, AuthorizationError, InvalidRUTError
+from core.exceptions import AuthenticationError, ValidationError, AuthorizationError
 
 
 class TestPasswordHashing:
@@ -220,26 +220,75 @@ class TestRegistroUsuarios:
 class TestInicializacionAdmin:
     @patch('services.usuarios.UsuariosRepository')
     def test_detecta_admin_existente(self, mock_repo):
-        """Should detect existing admin."""
+        """Si ya hay un administrador, el bootstrap se rechaza."""
         mock_usr = MagicMock()
         mock_usr.get_by_rol.return_value = [
             {"rut_usuario": "111111111", "rol": "Administrador", "activo": True}
         ]
         mock_repo.return_value = mock_usr
-        
+
         service = UsuariosService()
-        # Script logic tested separately
-        admins = mock_usr.get_by_rol("Administrador")
-        active_admins = [a for a in admins if a.get("activo")]
-        assert len(active_admins) > 0
-    
+        service.repo = mock_usr
+        with pytest.raises(AuthorizationError):
+            service.crear_primer_administrador(
+                {
+                    "rut_usuario": "22.222.222-2",
+                    "nombre_usuario": "Otro Admin",
+                    "password": "ClaveSegura123",
+                }
+            )
+        mock_usr.create.assert_not_called()
+
     @patch('services.usuarios.UsuariosRepository')
     def test_no_duplicar_admin(self, mock_repo):
-        """Should not create duplicate admin if exists."""
+        """Sin administradores, tampoco se crea uno con un RUT ya registrado."""
         mock_usr = MagicMock()
-        mock_usr.get_by_rol.return_value = [
-            {"rut_usuario": "111111111", "rol": "Administrador", "activo": True}
-        ]
+        mock_usr.get_by_rol.return_value = []
+        mock_usr.get_by_rut.return_value = {"rut_usuario": "111111111"}
         mock_repo.return_value = mock_usr
-        # Script should stop
-        assert True
+
+        service = UsuariosService()
+        service.repo = mock_usr
+        with pytest.raises(ValidationError):
+            service.crear_primer_administrador(
+                {
+                    "rut_usuario": "11.111.111-1",
+                    "nombre_usuario": "Admin",
+                    "password": "ClaveSegura123",
+                }
+            )
+        mock_usr.create.assert_not_called()
+
+    @patch('services.usuarios.UsuariosRepository')
+    def test_inactivo_con_clave_incorrecta_no_revela_estado(self, mock_repo):
+        """Con contraseña incorrecta no se informa que la cuenta está inactiva."""
+        mock_usr = MagicMock()
+        mock_usr.get_by_rut.return_value = {
+            "rut_usuario": "111111111",
+            "rol": "Operario",
+            "activo": False,
+            "password_hash": hash_password("TestPass123"),
+        }
+        mock_repo.return_value = mock_usr
+
+        service = UsuariosService()
+        service.repo = mock_usr
+        with pytest.raises(AuthenticationError) as error:
+            service.autenticar("111111111", "OtraClave999")
+        assert str(error.value) == "Credenciales inválidas"
+
+    @patch('services.usuarios.UsuariosRepository')
+    def test_cambios_de_cuenta_exigen_autorizador(self, mock_repo):
+        """Activar, desactivar o modificar sin indicar administrador se rechaza."""
+        mock_usr = MagicMock()
+        mock_repo.return_value = mock_usr
+        service = UsuariosService()
+        service.repo = mock_usr
+
+        with pytest.raises(AuthorizationError):
+            service.activar_usuario("111111111")
+        with pytest.raises(AuthorizationError):
+            service.desactivar_usuario("111111111")
+        with pytest.raises(AuthorizationError):
+            service.modificar_usuario("111111111", {"nombre_usuario": "X"})
+        mock_usr.update.assert_not_called()

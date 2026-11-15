@@ -30,7 +30,7 @@ class SupabaseClient:
         """Initialize Supabase client from settings."""
         try:
             settings = get_settings(use_streamlit=False)
-            self._client = create_client(settings.supabase_url, settings.supabase_key)
+            self._client = create_client(settings.supabase_url, settings.clave_servidor)
             logger.info("Supabase client initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Supabase client: {type(e).__name__}")

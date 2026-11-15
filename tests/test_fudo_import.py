@@ -4,7 +4,6 @@ Tests for FUDO import - flexible, no assumptions.
 import pytest
 from unittest.mock import MagicMock, patch
 from services.fudo_import import FudoImportService
-from core.exceptions import ValidationError
 
 
 class TestFudoImport:

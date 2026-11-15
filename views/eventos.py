@@ -402,7 +402,7 @@ def _formulario_evento(
         enviado = st.form_submit_button(
             "Guardar cambios" if editar else "Registrar evento",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
 
     if not enviado:
@@ -500,7 +500,7 @@ def _panel_estado(
         key=f"eve_boton_{accion}_{identificador}",
         type="primary",
         disabled=not confirmar,
-        use_container_width=True,
+        width="stretch",
     ):
         try:
             with cargando(f"Procesando «{nombre}»…"):
@@ -521,8 +521,11 @@ def _panel_estado(
         st.rerun()
 
 
-def _vista_artistas(eventos: List[Dict[str, Any]]) -> None:
-    artistas = agrupar_artistas(eventos)
+def _vista_artistas(
+    eventos: List[Dict[str, Any]],
+    artistas: List[Dict[str, Any]],
+) -> None:
+    """Resumen por artista, a partir de los eventos ya agrupados."""
     con_nombre = [grupo for grupo in artistas if grupo["artista"] != SIN_ARTISTA]
     con_activos = sum(1 for grupo in con_nombre if grupo["activos"])
 
@@ -712,4 +715,4 @@ def render_eventos() -> None:
                 _panel_estado(eventos, usuario)
 
     with pestana_artistas:
-        _vista_artistas(eventos)
+        _vista_artistas(eventos, artistas)

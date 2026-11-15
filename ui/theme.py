@@ -5,30 +5,12 @@ Streamlit a la identidad visual del proyecto. No contiene lógica de negocio.
 """
 import streamlit as st
 
-COLORS = {
-    "sidebar": "#0E0E0F",
-    "sidebar_hover": "#1A1A1D",
-    "sidebar_border": "#26262A",
-    "surface": "#FFFFFF",
-    "canvas": "#F9F9FB",
-    "border": "#D1D1D6",
-    "border_soft": "#E7E7EA",
-    "wine": "#800020",
-    "wine_dark": "#5C0017",
-    "wine_soft": "#F7E9ED",
-    "amber": "#E58E19",
-    "amber_soft": "#FDF3E3",
-    "red": "#C6282D",
-    "red_soft": "#FBEAEA",
-    "green": "#1E7F47",
-    "green_soft": "#E8F7ED",
-    "text": "#111113",
-    "muted": "#6B6B70",
-    "muted_soft": "#9A9AA1",
-}
+from ui.imagenes import FONDO
 
 CSS = """
 <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
     :root {
         --ink-sidebar: #0E0E0F;
         --ink-sidebar-hover: #1A1A1D;
@@ -49,11 +31,20 @@ CSS = """
         --ink-text: #111113;
         --ink-muted: #6B6B70;
         --ink-muted-soft: #9A9AA1;
+        --ink-sidebar-card: #151517;
+        --ink-sidebar-line: #242427;
+        --ink-sidebar-text-soft: #A6A6AD;
+        --ink-sidebar-label: #6F6F77;
+        --ink-fondo: url('__FONDO__');
     }
 
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
     html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    /* Streamlit fija su propia fuente y relleno en los títulos de markdown;
+       este selector tiene la misma especificidad y se carga después. */
+    .stApp h1, .stApp h2, .stApp h3, .stApp h4 {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
@@ -86,12 +77,15 @@ CSS = """
     [data-testid="stSidebar"] {
         background: var(--ink-sidebar);
         border-right: 1px solid var(--ink-sidebar-border);
-        min-width: 220px !important;
-        max-width: 220px !important;
     }
 
-    [data-testid="stSidebar"] > div {
-        width: 220px;
+    /* Ancho fijo solo con el menú abierto y en pantallas medianas o grandes:
+       al colapsarlo Streamlit lo oculta y en el celular usa todo el ancho. */
+    @media (min-width: 640px) {
+        [data-testid="stSidebar"][data-collapsed="false"] {
+            min-width: 248px;
+            max-width: 248px;
+        }
     }
 
     [data-testid="stSidebar"] [data-testid="stSidebarContent"] {
@@ -106,27 +100,28 @@ CSS = """
     }
 
     .ink-sidebar-brand {
-        padding: 0.25rem 0.5rem 0.9rem 0.5rem;
+        padding: 0.1rem 0.5rem 0.9rem 0.5rem;
+        text-align: center;
     }
 
-    .ink-sidebar-wordmark {
-        color: #FFFFFF;
-        font-size: 1.35rem;
-        font-weight: 800;
-        letter-spacing: -0.035em;
-        line-height: 1.1;
+    .ink-sidebar-logo {
+        display: block;
+        width: 100%;
+        max-width: 170px;
+        height: auto;
+        margin: 0 auto 0.35rem auto;
     }
 
     .ink-sidebar-subtitle {
-        color: #9A9AA1;
+        color: var(--ink-muted-soft);
         font-size: 0.72rem;
         margin-top: 0.2rem;
         letter-spacing: 0.01em;
     }
 
     .ink-sidebar-user {
-        background: #151517;
-        border: 1px solid #242427;
+        background: var(--ink-sidebar-card);
+        border: 1px solid var(--ink-sidebar-line);
         border-radius: 10px;
         padding: 0.7rem 0.75rem;
         margin: 0 0.15rem 1rem 0.15rem;
@@ -143,13 +138,13 @@ CSS = """
     }
 
     .ink-sidebar-user-role {
-        color: #A6A6AD;
+        color: var(--ink-sidebar-text-soft);
         font-size: 0.72rem;
         margin-top: 0.15rem;
     }
 
     .ink-sidebar-label {
-        color: #6F6F77;
+        color: var(--ink-sidebar-label);
         font-size: 0.64rem;
         font-weight: 700;
         letter-spacing: 0.09em;
@@ -159,7 +154,7 @@ CSS = """
     }
 
     .ink-sidebar-rule {
-        border-top: 1px solid #242427;
+        border-top: 1px solid var(--ink-sidebar-line);
         margin: 0.8rem 0.35rem 0.8rem 0.35rem;
     }
 
@@ -237,11 +232,20 @@ CSS = """
         color: var(--ink-text);
     }
 
+    /* La etiqueta de los botones es un <p>: debe heredar el color del botón
+       (blanco en los primarios) en vez del color de texto general. */
+    .stButton button p,
+    .stDownloadButton button p,
+    [data-testid="stFormSubmitButton"] button p {
+        color: inherit;
+    }
+
     .ink-page-head {
         margin: 0.15rem 0 1.4rem 0;
     }
 
-    .ink-page-title {
+    .ink-page-head .ink-page-title {
+        padding: 0;
         color: var(--ink-text);
         font-size: 1.9rem;
         font-weight: 800;
@@ -427,6 +431,49 @@ CSS = """
     }
 
     /* ---------------------------------------------------------------
+       Portada del inicio (fotografía del local)
+       --------------------------------------------------------------- */
+    .ink-hero {
+        border-radius: 14px;
+        overflow: hidden;
+        min-height: 150px;
+        padding: 1.6rem 1.8rem;
+        margin: 0 0 1.4rem 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1.5rem;
+        background:
+            linear-gradient(90deg, rgba(14, 14, 15, 0.92) 0%, rgba(14, 14, 15, 0.70) 45%, rgba(92, 0, 23, 0.35) 100%),
+            var(--ink-fondo) center 60% / cover no-repeat,
+            var(--ink-sidebar);
+        box-shadow: 0 8px 24px rgba(14, 14, 15, 0.12);
+    }
+
+    .ink-hero .ink-hero-title {
+        color: #FFFFFF;
+        padding: 0;
+        font-size: 1.85rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        line-height: 1.15;
+        margin: 0;
+    }
+
+    .ink-hero-subtitle {
+        color: #E7E7EA;
+        font-size: 0.92rem;
+        margin: 0.35rem 0 0 0;
+        line-height: 1.45;
+    }
+
+    @media (max-width: 640px) {
+        .ink-hero {
+            padding: 1.25rem;
+        }
+    }
+
+    /* ---------------------------------------------------------------
        Login
        --------------------------------------------------------------- */
     .ink-login-wrap {
@@ -434,27 +481,34 @@ CSS = """
     }
 
     .ink-login-brand {
-        background: var(--ink-sidebar);
-        border: 1px solid #242427;
+        /* Fotografía del local con un velo oscuro para que el texto se lea. */
+        background:
+            linear-gradient(180deg, rgba(14, 14, 15, 0.55) 0%, rgba(14, 14, 15, 0.30) 40%, rgba(14, 14, 15, 0.92) 100%),
+            linear-gradient(135deg, rgba(92, 0, 23, 0.45) 0%, rgba(14, 14, 15, 0) 60%),
+            var(--ink-fondo) center / cover no-repeat,
+            var(--ink-sidebar);
+        border: 1px solid var(--ink-sidebar-line);
         border-radius: 16px;
         min-height: 560px;
-        padding: 3rem 2.6rem 2.4rem 2.6rem;
+        padding: 2.4rem 2.6rem;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
-        box-shadow: 0 10px 30px rgba(14, 14, 15, 0.10);
+        box-shadow: 0 10px 30px rgba(14, 14, 15, 0.18);
+        overflow: hidden;
     }
 
-    .ink-login-wordmark {
-        color: #FFFFFF;
-        font-size: 2.7rem;
-        font-weight: 800;
-        letter-spacing: -0.05em;
-        line-height: 1;
+    .ink-login-logo {
+        display: block;
+        width: 100%;
+        max-width: 260px;
+        height: auto;
+        filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.55));
     }
 
     .ink-login-tagline {
-        color: #C3C3CA;
+        color: #E7E7EA;
+        text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
         font-size: 1.02rem;
         margin-top: 0.65rem;
         max-width: 15rem;
@@ -462,7 +516,7 @@ CSS = """
     }
 
     .ink-login-brand-copy {
-        color: #8E8E96;
+        color: #C7C7CE;
         font-size: 0.86rem;
         line-height: 1.6;
         max-width: 17rem;
@@ -470,12 +524,12 @@ CSS = """
     }
 
     .ink-login-brand-rule {
-        border-top: 1px solid #2A2A2E;
+        border-top: 1px solid rgba(255, 255, 255, 0.18);
         margin: 1.4rem 0;
     }
 
     .ink-login-brand-foot {
-        color: #6F6F77;
+        color: var(--ink-sidebar-text-soft);
         font-size: 0.72rem;
         letter-spacing: 0.01em;
     }
@@ -807,7 +861,9 @@ CSS = """
     .ink-status--red { color: var(--ink-red); background: var(--ink-red-soft); }
     .ink-status--wine { color: var(--ink-wine); background: var(--ink-wine-soft); }
     .ink-status--muted { color: var(--ink-muted); background: var(--ink-canvas); }
+    .ink-status--default { color: var(--ink-text); background: var(--ink-canvas); }
 
+    .ink-metrics--1 { grid-template-columns: minmax(0, 1fr); }
     .ink-metrics--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .ink-metrics--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .ink-metrics--4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -912,4 +968,4 @@ CSS = """
 
 def inject_theme() -> None:
     """Inyecta el CSS global. Debe llamarse después de set_page_config."""
-    st.markdown(CSS, unsafe_allow_html=True)
+    st.markdown(CSS.replace("__FONDO__", FONDO), unsafe_allow_html=True)

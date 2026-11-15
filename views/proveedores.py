@@ -219,7 +219,7 @@ def _formulario_proveedor(
         enviado = st.form_submit_button(
             "Guardar cambios" if editar else "Registrar proveedor",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
 
     if not enviado:
@@ -307,7 +307,7 @@ def _panel_estado(
         key=f"prov_boton_{accion}_{rut}",
         type="primary",
         disabled=not confirmar,
-        use_container_width=True,
+        width="stretch",
     ):
         try:
             with cargando(f"Procesando «{nombre}»…"):

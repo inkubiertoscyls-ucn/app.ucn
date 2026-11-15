@@ -5,12 +5,13 @@ estimado y los movimientos recientes. No crea ni modifica datos.
 """
 from __future__ import annotations
 
-from datetime import datetime
 from html import escape
 from typing import Any, Dict, List, Optional
 
 import streamlit as st
 
+from core.tiempo import ahora_chile
+from core.utils import formatear_rut
 from core.exceptions import AuthorizationError
 from data.catalogos import listar_areas, listar_tipos_movimiento
 from data.errors import ErrorDatos
@@ -18,7 +19,7 @@ from data.inventario import resumen_inventario, ultimos_movimientos
 from data.productos import listar_productos
 from ui.feedback import boton_reintentar, cargando, mostrar_error, mostrar_vacio
 from ui.format import area_visible, fmt_cantidad, fmt_clp, fmt_fecha_hora
-from ui.layout import metric_grid, page_header, status_badge
+from ui.layout import hero_header, metric_grid, status_badge
 
 ADMINISTRADOR = "Administrador"
 
@@ -76,7 +77,7 @@ def _panel_valor(resumen: Dict[str, Any]) -> str:
 
 
 def _panel_actualizacion(ultimo: Optional[Dict[str, Any]]) -> str:
-    ahora = datetime.now()
+    ahora = ahora_chile()
     sello = ahora.strftime("%d/%m/%Y · %H:%M")
 
     if ultimo:
@@ -93,7 +94,7 @@ def _panel_actualizacion(ultimo: Optional[Dict[str, Any]]) -> str:
         '<div class="ink-panel">'
         '<div class="ink-panel-label">Última actualización</div>'
         f'<div class="ink-panel-stamp">{escape(sello)}</div>'
-        '<div class="ink-panel-hint">Consulta en vivo a Supabase.</div>'
+        '<div class="ink-panel-hint">Datos de Supabase, se actualizan cada minuto.</div>'
         f'<div class="ink-panel-hint">{escape(detalle)}</div>'
         "</div>"
     )
@@ -155,7 +156,8 @@ def _tabla_movimientos(
             cantidad_texto = fmt_cantidad(cantidad)
 
         fecha = fmt_fecha_hora(movimiento.get("fecha_hora_registro"))
-        rut = str(movimiento.get("rut_usuario") or "—")
+        rut_crudo = movimiento.get("rut_usuario")
+        rut = formatear_rut(rut_crudo) if rut_crudo else "—"
 
         filas.append(
             "<tr>"
@@ -188,11 +190,11 @@ def render_inicio() -> None:
     area = area_visible(user.get("area_asignada"))
 
     if es_admin:
-        page_header("Inicio", "Panel general de gestión")
+        hero_header("Inicio", "Panel general de gestión")
         alcance = "Inventario global · todas las áreas"
     else:
         subtitulo = f"Resumen de tu área · {area}" if area else "Resumen de tu área"
-        page_header("Inicio", subtitulo)
+        hero_header("Inicio", subtitulo)
         alcance = f"Tu área · {area}" if area else "Área no asignada"
 
     st.markdown(

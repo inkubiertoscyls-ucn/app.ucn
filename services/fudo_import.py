@@ -22,6 +22,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import pandas as pd
 
+from core.tiempo import hoy_chile, marca_tiempo
 from core.exceptions import ValidationError
 from db.supabase_client import get_supabase_client
 from repositories.base import BaseRepository
@@ -51,6 +52,24 @@ _CAMPOS_PRODUCTO = (
     "Item",
     "nombre_producto",
 )
+# Columnas opcionales que distinguen dos ventas iguales del mismo día
+# (número de venta, ticket, comanda u hora). Si el archivo no las trae, la
+# detección de duplicados usa solo fecha, total, cantidad y producto.
+_CAMPOS_REFERENCIA = (
+    "id_venta",
+    "Id Venta",
+    "ID Venta",
+    "Id",
+    "ID",
+    "N° Venta",
+    "Nº Venta",
+    "Número",
+    "Numero",
+    "Ticket",
+    "Comanda",
+    "Folio",
+)
+_CAMPOS_HORA = ("hora", "Hora", "Hora Venta", "hora_venta")
 
 
 def _vacio(valor: Any) -> bool:
@@ -88,7 +107,7 @@ def _fecha_iso(valor: Any, hoy: Optional[date] = None) -> Tuple[Optional[str], O
     except Exception:
         return None, "La fecha de venta no es válida."
 
-    referencia = hoy or date.today()
+    referencia = hoy or hoy_chile()
     if fecha > referencia:
         return None, "La fecha de venta no puede ser futura."
     return fecha.isoformat(), None
@@ -154,14 +173,21 @@ def _hash_canonico(
     total_venta: Optional[float],
     cantidad_total: Optional[float],
     producto: str,
+    referencia: str = "",
 ) -> str:
-    """Hash estable para detectar duplicados exactos entre archivo y BD."""
+    """Hash estable para detectar duplicados exactos entre archivo y BD.
+
+    Sin `referencia` el resultado es idéntico al de versiones anteriores, así
+    los registros ya importados se siguen reconociendo.
+    """
     partes = [
         fecha_venta or "",
         f"{total_venta:.2f}" if total_venta is not None else "",
         f"{cantidad_total:.4f}" if cantidad_total is not None else "",
         _texto(producto).casefold(),
     ]
+    if referencia:
+        partes.append(referencia.casefold())
     contenido = "|".join(partes)
     return hashlib.sha256(contenido.encode("utf-8")).hexdigest()
 
@@ -176,6 +202,15 @@ def _primer_valor(row: Any, claves: Iterable[str]) -> Any:
         except (TypeError, ValueError):
             continue
     return None
+
+
+def _referencia_venta(row: Any) -> str:
+    """Identificador y/o hora de la venta, si el archivo los incluye."""
+    partes = [
+        _texto(_primer_valor(row, _CAMPOS_REFERENCIA)),
+        _texto(_primer_valor(row, _CAMPOS_HORA)),
+    ]
+    return "|".join(parte for parte in partes if parte)
 
 
 class FudoImportService:
@@ -430,7 +465,7 @@ class FudoImportService:
             if hash_registro
         }
         df_mapeado = self._renombrar(df, mapeo)
-        hoy = date.today()
+        hoy = hoy_chile()
 
         filas: List[Dict[str, Any]] = []
         errores: List[Dict[str, Any]] = []
@@ -519,9 +554,19 @@ class FudoImportService:
                 )
                 continue
 
-            hash_registro = _hash_canonico(fecha_iso, total, cantidad, producto)
+            referencia = _referencia_venta(fila_original)
+            hash_registro = _hash_canonico(
+                fecha_iso, total, cantidad, producto, referencia
+            )
+            # Los registros importados antes de usar la referencia se guardaron
+            # con el hash base; también se comparan para no duplicarlos.
+            hash_base = (
+                _hash_canonico(fecha_iso, total, cantidad, producto)
+                if referencia
+                else hash_registro
+            )
 
-            if hash_registro in existentes:
+            if hash_registro in existentes or hash_base in existentes:
                 duplicados += 1
                 detalle = {
                     "registro": numero_registro,
@@ -696,7 +741,9 @@ class FudoImportService:
         total, _ = _numero(_primer_valor(row, _CAMPOS_TOTAL))
         cantidad, _ = _numero(_primer_valor(row, _CAMPOS_CANTIDAD))
         producto = _texto(_primer_valor(row, _CAMPOS_PRODUCTO))
-        return _hash_canonico(fecha_iso, total, cantidad, producto)
+        return _hash_canonico(
+            fecha_iso, total, cantidad, producto, _referencia_venta(row)
+        )
 
     # ------------------------------------------------------------------
     # Importación
@@ -742,7 +789,7 @@ class FudoImportService:
         }
 
         origen = origen_archivo or "archivo FUDO"
-        ahora = datetime.now().isoformat()
+        ahora = marca_tiempo()
 
         for registro in analisis.get("registros_validos", []):
             datos = registro["datos"]
@@ -833,7 +880,7 @@ class FudoImportService:
                 "datos_raw": json.loads(
                     json.dumps(row.to_dict(), default=str)
                 ),
-                "fecha_importacion": datetime.now().isoformat(),
+                "fecha_importacion": marca_tiempo(),
             }
             if importado_por:
                 registro["importado_por"] = importado_por

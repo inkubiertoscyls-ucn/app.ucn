@@ -1,6 +1,5 @@
 """Pruebas de la traducción de errores de la capa de datos."""
 import httpx
-import pytest
 
 from core.exceptions import (
     AuthorizationError,

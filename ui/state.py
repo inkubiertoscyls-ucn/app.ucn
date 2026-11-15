@@ -1,9 +1,13 @@
 """Estado de sesión y navegación del frontend."""
 from __future__ import annotations
 
+import logging
+import time
 from typing import Any, Dict, Optional
 
 import streamlit as st
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_STATE = {
     "logged_in": False,
@@ -11,7 +15,13 @@ DEFAULT_STATE = {
     "page": "inicio",
     "auth_view": "login",
     "flash": None,
+    "ultima_actividad": None,
+    "ultima_revalidacion": None,
 }
+
+# Cada cuánto se vuelve a leer la cuenta en la base de datos para reflejar
+# desactivaciones o cambios de rol hechos por un administrador.
+REVALIDAR_CADA_SEGUNDOS = 60
 
 
 def init_state() -> None:
@@ -39,15 +49,78 @@ def go(page: str, **kwargs: Any) -> None:
 
 
 def logout() -> None:
-    """Cierra la sesión y vuelve al login."""
-    from data.cache import limpiar_cache
+    """Cierra la sesión y vuelve al login.
 
-    limpiar_cache()
+    No se limpia la caché de datos: `st.cache_data` es compartida por todos
+    los usuarios conectados y las lecturas ya validan permisos por sesión.
+    """
     st.session_state.logged_in = False
     st.session_state.user = None
     st.session_state.page = "inicio"
     st.session_state.auth_view = "login"
     st.session_state.flash = None
+    st.session_state.ultima_actividad = None
+    st.session_state.ultima_revalidacion = None
+
+
+def _minutos_inactividad() -> int:
+    """Minutos de inactividad permitidos (SESSION_TIMEOUT_MINUTES, por defecto 60)."""
+    from config.settings import get_settings
+
+    try:
+        minutos = int(get_settings(use_streamlit=True).session_timeout_minutes)
+    except Exception:
+        minutos = 60
+    return minutos if minutos > 0 else 60
+
+
+def _revalidar_usuario(user: Dict[str, Any]) -> Optional[str]:
+    """Relee la cuenta en BD. Devuelve un motivo de cierre o None si sigue válida."""
+    from repositories.usuarios import UsuariosRepository
+
+    try:
+        actual = UsuariosRepository().get_by_rut(str(user.get("rut_usuario") or ""))
+    except Exception as exc:
+        # Un corte de red no debe expulsar al usuario; se reintenta luego.
+        logger.warning("No se pudo revalidar la sesión: %s", type(exc).__name__)
+        return None
+
+    if not actual:
+        return "Tu cuenta ya no existe. Contacta al administrador."
+    if not actual.get("activo", False):
+        return "Tu cuenta fue desactivada. Contacta al administrador."
+
+    for campo in ("nombre_usuario", "rol", "area_asignada", "activo"):
+        user[campo] = actual.get(campo)
+    return None
+
+
+def verificar_sesion() -> bool:
+    """Aplica el cierre por inactividad y la revalidación periódica.
+
+    Devuelve False si la sesión se cerró (la vista debe mostrar el login).
+    """
+    user = current_user()
+    if not st.session_state.get("logged_in") or not user:
+        return False
+
+    ahora = time.time()
+    ultima = st.session_state.get("ultima_actividad") or ahora
+    if ahora - ultima > _minutos_inactividad() * 60:
+        logout()
+        flash("warning", "Tu sesión se cerró por inactividad. Ingresa nuevamente.")
+        return False
+    st.session_state.ultima_actividad = ahora
+
+    revisada = st.session_state.get("ultima_revalidacion") or 0
+    if ahora - revisada >= REVALIDAR_CADA_SEGUNDOS:
+        motivo = _revalidar_usuario(user)
+        st.session_state.ultima_revalidacion = ahora
+        if motivo:
+            logout()
+            flash("error", motivo)
+            return False
+    return True
 
 
 def flash(kind: str, message: str) -> None:

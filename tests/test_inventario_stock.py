@@ -5,7 +5,7 @@ Uses mocks to avoid real DB access.
 import pytest
 from unittest.mock import MagicMock, patch
 from services.inventario import InventarioService
-from core.exceptions import NegativeStockError, ValidationError, AuthorizationError
+from core.exceptions import ValidationError, AuthorizationError
 
 
 class TestInventarioStock:

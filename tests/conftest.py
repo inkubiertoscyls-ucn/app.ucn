@@ -11,6 +11,20 @@ def _sin_cache_datos(monkeypatch):
     monkeypatch.setenv("INK_DISABLE_CACHE", "1")
 
 
+@pytest.fixture(autouse=True)
+def _sesion_sin_revalidar(request, monkeypatch):
+    """Las pruebas de interfaz usan usuarios ficticios que no existen en la BD.
+
+    La revalidación periódica de la sesión se reemplaza por una que acepta la
+    cuenta tal cual; `test_correcciones.py` prueba la revalidación real.
+    """
+    if request.node.get_closest_marker("revalidacion_real"):
+        return
+    import ui.state
+
+    monkeypatch.setattr(ui.state, "_revalidar_usuario", lambda user: None)
+
+
 @pytest.fixture
 def mock_supabase_client():
     """Mock Supabase client for tests."""
