@@ -14,6 +14,15 @@
 - `dim_producto` SIN columna `area_habitual`
 - `hecho_inventario` SIN columna `costo_total`
 - `hecho_venta_fudo` tabla independiente
+- `dim_usuario.area_asignada` es texto (nombre de área o `Todas`), no FK
+- `hecho_inventario.cantidad` es decimal (`NUMERIC`)
+- `dim_fecha` usa solo `anio` (la columna duplicada `año` se eliminó en 007)
+
+## Estado en Supabase (verificado 2026-11-16)
+- `001_initial_schema.sql` refleja el esquema real de producción e incluye
+  los cambios de 002, 003, 006 y 007.
+- 006 (`dim_evento.fecha_evento`) y 007 (eliminar `dim_fecha."año"`): aplicadas.
+- 004: no requiere cambios (`area_asignada` ya es texto).
 
 ## Seguridad (005_enable_rls.sql)
 - La app se conecta con `SUPABASE_SERVICE_ROLE_KEY` (clave secreta) desde el servidor.

@@ -1,5 +1,9 @@
 -- Migración 004: Ajustar area_asignada en dim_usuario para permitir 'Todas' si es necesario
 -- NO EJECUTAR AUTOMÁTICAMENTE EN BD REMOTA
+--
+-- RESUELTO (verificado 2026-11-16): en Supabase area_asignada es VARCHAR(30)
+-- NOT NULL, sin FK a dim_area. El valor 'Todas' es válido y NO hace falta
+-- aplicar ninguna de las opciones de abajo. Se conserva como referencia.
 -- Revisar y ejecutar manualmente en Supabase SQL Editor
 
 -- NOTA: En el esquema actual (001_initial_schema.sql) area_asignada es BIGINT REFERENCES dim_area(id_area).
