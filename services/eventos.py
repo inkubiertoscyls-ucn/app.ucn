@@ -13,6 +13,7 @@ import math
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
+from core.eventos import TIPOS_EVENTO, tipos_evento_texto
 from core.exceptions import NotFoundError, ValidationError
 from repositories.eventos import EventosRepository
 
@@ -180,9 +181,10 @@ class EventosService:
         tipo = str(data.get("tipo_evento") or "").strip()
         if not tipo:
             raise ValidationError("El tipo de evento es requerido")
-        if len(tipo) > 50:
+        if tipo not in TIPOS_EVENTO:
             raise ValidationError(
-                "El tipo de evento no puede exceder 50 caracteres"
+                "El tipo de evento no es válido. Usa una de las opciones "
+                f"permitidas: {tipos_evento_texto()}."
             )
 
         costo = self._numero_no_negativo(

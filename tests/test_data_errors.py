@@ -109,7 +109,8 @@ def test_check_de_tipo_evento_tiene_mensaje_especifico():
 
     assert error.tipo == VALIDACION
     assert "tipo de evento" in error.mensaje.lower()
-    assert "Concierto" in error.mensaje
+    assert "Música en Vivo" in error.mensaje
+    assert "Concierto" not in error.mensaje
 
 
 def test_texto_demasiado_largo_indica_el_limite():

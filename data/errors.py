@@ -11,6 +11,7 @@ from typing import Optional
 
 import httpx
 
+from core.eventos import tipos_evento_texto
 from core.exceptions import (
     AuthorizationError,
     DuplicateError,
@@ -155,8 +156,7 @@ def _mensaje_postgres(exc: BaseException, codigo: str) -> Optional[str]:
         if "tipo_evento" in referencia or etiqueta == "tipo de evento":
             return (
                 "El tipo de evento no es válido. Usa una de las opciones "
-                "permitidas (por ejemplo: Concierto, Festival o Privado) o "
-                "revisa el catálogo antes de guardar."
+                f"permitidas: {tipos_evento_texto()}."
             )
         if etiqueta:
             return (

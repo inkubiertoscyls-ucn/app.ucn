@@ -205,7 +205,7 @@ def test_registrar_evento_guarda_la_fecha():
         {
             "nombre_evento": "Noche de jazz",
             "nombre_artista": "Trío Azul",
-            "tipo_evento": "Concierto",
+            "tipo_evento": "Música en Vivo",
             "costo_artista": 50000,
             "fecha_evento": date(2026, 12, 5),
         }

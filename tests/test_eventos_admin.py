@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from core.eventos import TIPOS_EVENTO
 from core.exceptions import (
     AuthorizationError,
     NotFoundError,
@@ -53,7 +54,7 @@ EVENTO = {
     "id_evento": 1,
     "nombre_evento": "Noche de jazz",
     "nombre_artista": "Trío Azul",
-    "tipo_evento": "Concierto",
+    "tipo_evento": "Música en Vivo",
     "costo_artista": 250000,
     "activo": True,
 }
@@ -61,7 +62,7 @@ EVENTO_INACTIVO = {
     "id_evento": 2,
     "nombre_evento": "Festival de verano",
     "nombre_artista": "Banda Sur",
-    "tipo_evento": "Festival",
+    "tipo_evento": "Stand-up Comedy",
     "costo_artista": 500000,
     "activo": False,
 }
@@ -69,7 +70,7 @@ EVENTO_SIN_ARTISTA = {
     "id_evento": 3,
     "nombre_evento": "Evento privado",
     "nombre_artista": "",
-    "tipo_evento": "Privado",
+    "tipo_evento": "Noche Temática",
     "costo_artista": 0,
     "activo": True,
 }
@@ -177,14 +178,14 @@ class TestServicioEventos:
             {
                 "nombre_evento": "  Noche de jazz  ",
                 "nombre_artista": "  Trío Azul ",
-                "tipo_evento": " Concierto ",
+                "tipo_evento": " Música en Vivo ",
                 "costo_artista": "250000",
             }
         )
 
         assert creado["nombre_evento"] == "Noche de jazz"
         assert creado["nombre_artista"] == "Trío Azul"
-        assert creado["tipo_evento"] == "Concierto"
+        assert creado["tipo_evento"] == "Música en Vivo"
         assert creado["costo_artista"] == 250000.0
         assert creado["activo"] is True
         assert len(servicio.repo.creados) == 1
@@ -199,6 +200,9 @@ class TestServicioEventos:
             ({"nombre_artista": "A" * 151}, "artista"),
             ({"tipo_evento": "A" * 51}, "tipo"),
             ({"tipo_evento": ""}, "tipo"),
+            # La restricción de Supabase solo acepta el catálogo exacto.
+            ({"tipo_evento": "Concierto"}, "no es válido"),
+            ({"tipo_evento": "música en vivo"}, "no es válido"),
         ],
     )
     def test_rechaza_datos_invalidos(self, cambios, mensaje):
@@ -206,7 +210,7 @@ class TestServicioEventos:
         datos = {
             "nombre_evento": "Noche de jazz",
             "nombre_artista": "Trío Azul",
-            "tipo_evento": "Concierto",
+            "tipo_evento": "Música en Vivo",
             "costo_artista": 1000,
             **cambios,
         }
@@ -216,6 +220,17 @@ class TestServicioEventos:
 
         assert mensaje in str(info.value).lower()
 
+    def test_acepta_todos_los_tipos_del_catalogo(self):
+        servicio = _servicio()
+
+        for tipo in TIPOS_EVENTO:
+            creado = servicio.registrar_evento(
+                {"nombre_evento": "Noche de jazz", "tipo_evento": tipo}
+            )
+            assert creado["tipo_evento"] == tipo
+
+        assert len(servicio.repo.creados) == len(TIPOS_EVENTO)
+
     def test_no_bloquea_nombres_duplicados(self):
         servicio = _servicio([EVENTO])
 
@@ -223,7 +238,7 @@ class TestServicioEventos:
             {
                 "nombre_evento": "Noche de jazz",
                 "nombre_artista": "Otra banda",
-                "tipo_evento": "Concierto",
+                "tipo_evento": "Música en Vivo",
             }
         )
 
@@ -420,7 +435,7 @@ class TestVistaEventos:
         ] == [1]
         assert [
             fila["id_evento"]
-            for fila in filtrar_eventos(eventos, tipo="Festival")
+            for fila in filtrar_eventos(eventos, tipo="Stand-up Comedy")
         ] == [2]
         assert [
             fila["id_evento"]
